@@ -4,42 +4,16 @@ import { useSpeech } from "../hooks/useSpeech";
 export const ChatInterface = ({ hidden, ...props }) => {
   const input = useRef();
   const fileInput = useRef();
-  const { tts, loading, message, startRecording, stopRecording, recording, currentMessageText, stopAudio, messages } = useSpeech();
+  const { tts, loading, message, startRecording, stopRecording, recording, currentMessageText, stopAudio, messages, currentImages } = useSpeech();
   const [chatHistory, setChatHistory] = useState([]); // Store all messages in order
   const [isChatOpen, setIsChatOpen] = useState(false);
   const [documents, setDocuments] = useState([]); // Store uploaded documents
   const [isUploading, setIsUploading] = useState(false); // Track upload status
-  const [sessionId, setSessionId] = useState(null); // Store session ID
 
-  // Create a session when the component mounts
+  // Debug: Log when currentImages changes
   useEffect(() => {
-    const createSession = async () => {
-      try {
-        // Use the same backend URL as the speech hook
-        const response = await fetch('http://localhost:3002/api/sessions', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            student_name: 'Avatar User',
-            topic: 'Document Analysis'
-          })
-        });
-
-        if (!response.ok) {
-          throw new Error(`HTTP error! status: ${response.status}`);
-        }
-
-        const sessionData = await response.json();
-        setSessionId(sessionData.id);
-      } catch (error) {
-        console.error('Failed to create session:', error);
-      }
-    };
-
-    createSession();
-  }, []);
+    console.log("ChatInterface - currentImages updated:", currentImages);
+  }, [currentImages]);
 
   // Load chat history from localStorage on component mount
   useEffect(() => {
@@ -74,7 +48,7 @@ export const ChatInterface = ({ hidden, ...props }) => {
   // Handle document upload
   const handleDocumentUpload = async (event) => {
     const file = event.target.files[0];
-    if (!file || !sessionId) return;
+    if (!file) return;
 
     setIsUploading(true);
     try {
@@ -82,7 +56,7 @@ export const ChatInterface = ({ hidden, ...props }) => {
       formData.append('file', file);
 
       // Use the same backend URL as the speech hook
-      const response = await fetch(`http://localhost:3002/api/documents/upload?session_id=${sessionId}`, {
+      const response = await fetch(`http://localhost:3002/api/documents/upload`, {
         method: 'POST',
         body: formData
       });
@@ -183,7 +157,7 @@ export const ChatInterface = ({ hidden, ...props }) => {
       {/* Document Upload Button - Always visible */}
       <button
         onClick={() => document.getElementById('documentUpload').click()}
-        disabled={isUploading || !sessionId}
+        disabled={isUploading}
         className="absolute left-4 top-20 bg-black bg-opacity-50 backdrop-blur-md text-white p-3 rounded-lg pointer-events-auto z-20 hover:bg-opacity-70 transition-all disabled:opacity-50"
       >
         {isUploading ? (
@@ -277,10 +251,44 @@ export const ChatInterface = ({ hidden, ...props }) => {
           {isUploading && (
             <p className="text-gray-600 mt-2">Uploading document...</p>
           )}
-          {!sessionId && (
-            <p className="text-gray-600 mt-2">Initializing session...</p>
-          )}
         </div>
+        
+        {/* Images Display Section - Middle Right, won't overlap controls */}
+        {currentImages && currentImages.length > 0 && (
+          <div className="absolute right-4 top-32 bg-black bg-opacity-50 backdrop-blur-md p-4 rounded-lg pointer-events-auto z-10" style={{ maxWidth: '350px', maxHeight: 'calc(100vh - 250px)', overflowY: 'auto' }}>
+            <h3 className="text-white font-semibold mb-3 text-sm">Related Topics</h3>
+            <div className="flex flex-col gap-3">
+              {currentImages.map((imageData, index) => {
+                // Handle both old format (just URL string) and new format (object with url and label)
+                const imageUrl = typeof imageData === 'string' ? imageData : imageData.url;
+                const imageLabel = typeof imageData === 'object' && imageData.label ? imageData.label : `Image ${index + 1}`;
+                
+                return (
+                  <div key={`img-${index}-${imageUrl}`} className="relative overflow-hidden rounded-lg shadow-lg" style={{ backgroundColor: '#1a1a1a' }}>
+                    {/* Category Label Overlay */}
+                    <div className="absolute top-0 left-0 right-0 bg-gradient-to-b from-black/80 to-transparent p-2 z-10">
+                      <span className="text-white text-xs font-semibold">{imageLabel}</span>
+                    </div>
+                    <img
+                      src={imageUrl}
+                      alt={imageLabel}
+                      className="w-full object-cover transition-transform hover:scale-105"
+                      style={{ height: '200px', display: 'block' }}
+                      onLoad={(e) => {
+                        console.log(`Image ${index + 1} loaded successfully:`, imageUrl, 'Label:', imageLabel);
+                      }}
+                      onError={(e) => {
+                        console.error(`Image ${index + 1} failed to load:`, imageUrl);
+                        // Fallback to a different random image if one fails
+                        e.target.src = `https://picsum.photos/350/200?random=${Date.now()}_${index}`;
+                      }}
+                    />
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
         
         <div className="w-full flex flex-col items-end justify-center gap-4"></div>
         <div className="flex items-center gap-2 pointer-events-auto max-w-screen-sm w-full mx-auto">
@@ -317,10 +325,10 @@ export const ChatInterface = ({ hidden, ...props }) => {
             }}
           />
           <button
-            disabled={loading || message || !sessionId}
+            disabled={loading || message}
             onClick={sendMessage}
             className={`bg-gray-500 hover:bg-gray-600 text-white p-4 px-10 font-semibold uppercase rounded-md ${
-              loading || message || !sessionId ? "cursor-not-allowed opacity-30" : ""
+              loading || message ? "cursor-not-allowed opacity-30" : ""
             }`}
           >
             Send

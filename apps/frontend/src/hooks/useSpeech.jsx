@@ -12,6 +12,7 @@ export const SpeechProvider = ({ children }) => {
   const [loading, setLoading] = useState(false);
   const [currentMessageText, setCurrentMessageText] = useState(""); // Track current message text for captions
   const [currentAudio, setCurrentAudio] = useState(null); // Track current audio for stopping
+  const [currentImages, setCurrentImages] = useState([]); // Track current images
 
   let chunks = [];
 
@@ -45,6 +46,14 @@ export const SpeechProvider = ({ children }) => {
           responseMessages = response;
         } else if (response.messages && Array.isArray(response.messages)) {
           responseMessages = response.messages;
+        }
+        
+        // Handle images
+        if (response.images && Array.isArray(response.images)) {
+          console.log("Setting current images (STS):", response.images);
+          setCurrentImages(response.images);
+        } else {
+          console.log("No images in STS response:", response);
         }
         
         if (responseMessages.length > 0) {
@@ -116,6 +125,14 @@ export const SpeechProvider = ({ children }) => {
         responseMessages = response.messages;
       }
       
+      // Handle images
+      if (response.images && Array.isArray(response.images)) {
+        console.log("Setting current images (TTS):", response.images);
+        setCurrentImages(response.images);
+      } else {
+        console.log("No images in TTS response:", response);
+      }
+      
       if (responseMessages.length > 0) {
         console.log("Received messages from TTS:", responseMessages);
         setMessages((messages) => [...messages, ...responseMessages]);
@@ -175,6 +192,7 @@ export const SpeechProvider = ({ children }) => {
         messages, // Expose messages array for chat history
         setLoading, // Expose setLoading function
         setMessages, // Expose setMessages function
+        currentImages, // Expose current images
       }}
     >
       {children}

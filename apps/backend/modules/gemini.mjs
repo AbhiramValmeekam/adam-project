@@ -65,6 +65,267 @@ const responseSchema = z.object({
   )
 });
 
+// Function to generate images using Pollinations.AI (Free AI image generation)
+function generateAIImage(prompt, seed = null) {
+  // Pollinations.AI provides free AI-generated images based on prompts
+  // Format: https://image.pollinations.ai/prompt/{prompt}?width=400&height=300&seed={seed}
+  const encodedPrompt = encodeURIComponent(prompt);
+  const seedParam = seed ? `&seed=${seed}` : '';
+  const imageUrl = `https://image.pollinations.ai/prompt/${encodedPrompt}?width=400&height=300&nologo=true${seedParam}`;
+  
+  return {
+    url: imageUrl,
+    label: prompt,
+    photographer: 'AI Generated',
+    source: 'pollinations.ai',
+    alt: prompt
+  };
+}
+
+// Function to fetch images from Wikimedia Commons API (backup)
+async function fetchWikimediaImages(searchQuery, count = 2) {
+  try {
+    const response = await fetch(
+      `https://commons.wikimedia.org/w/api.php?action=query&format=json&generator=search&gsrnamespace=6&gsrsearch=${encodeURIComponent(searchQuery)}&gsrlimit=${count}&prop=imageinfo&iiprop=url|extmetadata&iiurlwidth=400`,
+      {
+        headers: {
+          'User-Agent': 'DigitalHumanApp/1.0'
+        }
+      }
+    );
+    
+    if (!response.ok) {
+      throw new Error(`Wikimedia API error: ${response.status}`);
+    }
+    
+    const data = await response.json();
+    
+    if (data.query && data.query.pages) {
+      const pages = Object.values(data.query.pages);
+      const images = [];
+      
+      for (const page of pages) {
+        if (page.imageinfo && page.imageinfo[0]) {
+          const imageInfo = page.imageinfo[0];
+          images.push({
+            url: imageInfo.thumburl || imageInfo.url,
+            label: searchQuery,
+            photographer: imageInfo.extmetadata?.Artist?.value || 'Wikimedia Commons',
+            source: 'wikimedia',
+            alt: page.title || searchQuery
+          });
+        }
+      }
+      
+      if (images.length > 0) {
+        console.log(`Found ${images.length} Wikimedia images for: ${searchQuery}`);
+        return images;
+      }
+    }
+    
+    // No images found, return placeholder
+    console.log(`No Wikimedia images found for: ${searchQuery}`);
+    const timestamp = Date.now();
+    return [{
+      url: `https://picsum.photos/400/300?random=${timestamp}`,
+      label: searchQuery,
+      photographer: 'Placeholder',
+      source: 'picsum'
+    }];
+  } catch (error) {
+    console.error('Error fetching from Wikimedia:', error.message);
+    // Fallback to placeholder
+    const timestamp = Date.now();
+    return [{
+      url: `https://picsum.photos/400/300?random=${timestamp}`,
+      label: searchQuery,
+      photographer: 'Placeholder',
+      source: 'picsum'
+    }];
+  }
+}
+
+// Function to fetch images from Pexels API (fallback)
+async function fetchPexelsImages(searchQuery, count = 2) {
+  const apiKey = process.env.PEXELS_API_KEY;
+  
+  // If no API key, return placeholder images with labels
+  if (!apiKey || apiKey === 'YOUR_PEXELS_API_KEY_HERE') {
+    console.log('Pexels API key not configured, using placeholder images');
+    const timestamp = Date.now();
+    return Array.from({ length: count }, (_, i) => ({
+      url: `https://picsum.photos/400/300?random=${timestamp + i}`,
+      label: searchQuery,
+      photographer: 'Placeholder',
+      source: 'picsum'
+    }));
+  }
+  
+  try {
+    const response = await fetch(
+      `https://api.pexels.com/v1/search?query=${encodeURIComponent(searchQuery)}&per_page=${count}&orientation=landscape`,
+      {
+        headers: {
+          'Authorization': apiKey
+        }
+      }
+    );
+    
+    if (!response.ok) {
+      throw new Error(`Pexels API error: ${response.status}`);
+    }
+    
+    const data = await response.json();
+    
+    if (data.photos && data.photos.length > 0) {
+      return data.photos.map(photo => ({
+        url: photo.src.medium, // 350x350 size
+        label: searchQuery,
+        photographer: photo.photographer,
+        source: 'pexels',
+        alt: photo.alt || searchQuery
+      }));
+    } else {
+      // No images found, return placeholder
+      console.log(`No Pexels images found for: ${searchQuery}`);
+      const timestamp = Date.now();
+      return [{
+        url: `https://picsum.photos/400/300?random=${timestamp}`,
+        label: searchQuery,
+        photographer: 'Placeholder',
+        source: 'picsum'
+      }];
+    }
+  } catch (error) {
+    console.error('Error fetching from Pexels:', error.message);
+    // Fallback to placeholder
+    const timestamp = Date.now();
+    return [{
+      url: `https://picsum.photos/400/300?random=${timestamp}`,
+      label: searchQuery,
+      photographer: 'Placeholder',
+      source: 'picsum'
+    }];
+  }
+}
+
+// Function to extract keywords and generate image data with labels
+async function generateImageUrls(question, responseText) {
+  const text = (question + ' ' + responseText).toLowerCase();
+  const images = [];
+  
+  // Common topic categories with keywords - improved matching
+  const topicCategories = [
+    { keywords: ['code', 'coding', 'programming', 'software', 'developer', 'computer', 'algorithm', 'function', 'variable', 'debug', 'javascript', 'python', 'java'], label: 'Programming & Code', imageUrl: 'https://picsum.photos/400/300?random=' },
+    { keywords: ['nature', 'tree', 'forest', 'mountain', 'ocean', 'landscape', 'environment', 'wildlife', 'plants', 'natural'], label: 'Nature & Landscape', imageUrl: 'https://picsum.photos/400/300?random=' },
+    { keywords: ['science', 'research', 'experiment', 'laboratory', 'chemistry', 'physics', 'biology', 'scientific'], label: 'Science & Research', imageUrl: 'https://picsum.photos/400/300?random=' },
+    { keywords: ['business', 'finance', 'money', 'economy', 'marketing', 'startup', 'entrepreneur', 'corporate'], label: 'Business & Finance', imageUrl: 'https://picsum.photos/400/300?random=' },
+    { keywords: ['art', 'painting', 'design', 'creative', 'artist', 'museum', 'drawing', 'artistic'], label: 'Art & Design', imageUrl: 'https://picsum.photos/400/300?random=' },
+    { keywords: ['travel', 'vacation', 'tourism', 'destination', 'journey', 'adventure', 'trip', 'explore'], label: 'Travel & Adventure', imageUrl: 'https://picsum.photos/400/300?random=' },
+    { keywords: ['food', 'cooking', 'recipe', 'restaurant', 'cuisine', 'meal', 'dish', 'dosa', 'idli', 'indian', 'breakfast', 'dinner'], label: 'Food & Cuisine', imageUrl: 'https://picsum.photos/400/300?random=' },
+    { keywords: ['health', 'fitness', 'exercise', 'wellness', 'medical', 'yoga', 'workout', 'healthy'], label: 'Health & Fitness', imageUrl: 'https://picsum.photos/400/300?random=' },
+    { keywords: ['technology', 'tech', 'innovation', 'digital', 'ai', 'robot', 'artificial intelligence', 'machine learning'], label: 'Technology & Innovation', imageUrl: 'https://picsum.photos/400/300?random=' },
+    { keywords: ['education', 'learning', 'study', 'school', 'university', 'student', 'teaching', 'academic'], label: 'Education & Learning', imageUrl: 'https://picsum.photos/400/300?random=' },
+    { keywords: ['music', 'song', 'instrument', 'concert', 'melody', 'audio', 'band', 'guitar', 'piano'], label: 'Music & Performance', imageUrl: 'https://picsum.photos/400/300?random=' },
+    { keywords: ['space', 'astronomy', 'planet', 'star', 'galaxy', 'universe', 'cosmos', 'nasa', 'rocket'], label: 'Space & Astronomy', imageUrl: 'https://picsum.photos/400/300?random=' },
+    { keywords: ['sports', 'game', 'football', 'basketball', 'cricket', 'athlete', 'competition', 'soccer'], label: 'Sports & Athletics', imageUrl: 'https://picsum.photos/400/300?random=' },
+    { keywords: ['architecture', 'building', 'construction', 'design', 'structure', 'skyscraper'], label: 'Architecture & Buildings', imageUrl: 'https://picsum.photos/400/300?random=' },
+    { keywords: ['animal', 'pet', 'dog', 'cat', 'bird', 'wildlife', 'zoo'], label: 'Animals & Wildlife', imageUrl: 'https://picsum.photos/400/300?random=' },
+    { keywords: ['car', 'vehicle', 'automobile', 'transportation', 'driving'], label: 'Vehicles & Transportation', imageUrl: 'https://picsum.photos/400/300?random=' },
+    { keywords: ['beach', 'sea', 'ocean', 'sand', 'wave', 'coast'], label: 'Beach & Ocean', imageUrl: 'https://picsum.photos/400/300?random=' },
+    { keywords: ['city', 'urban', 'metropolitan', 'downtown', 'skyline'], label: 'City & Urban Life', imageUrl: 'https://picsum.photos/400/300?random=' },
+  ];
+  
+  // Find matching topics
+  const matchedCategories = [];
+  for (const category of topicCategories) {
+    const matchCount = category.keywords.filter(keyword => text.includes(keyword)).length;
+    if (matchCount > 0) {
+      matchedCategories.push({ category, matchCount });
+    }
+  }
+  
+  // Sort by match count (most relevant first)
+  matchedCategories.sort((a, b) => b.matchCount - a.matchCount);
+  
+  // Generate image data from top matches using AI image generation
+  if (matchedCategories.length > 0) {
+    const images = [];
+    
+    // Get top 2 matches
+    const topMatches = matchedCategories.slice(0, 2);
+    
+    for (let i = 0; i < topMatches.length; i++) {
+      const match = topMatches[i];
+      
+      // Create a highly specific prompt based on the actual user question
+      // This ensures images are directly relevant to what the user asked
+      let imagePrompt = '';
+      const label = match.category.label.toLowerCase();
+      
+      // Generate prompt based on the actual question for maximum relevance
+      if (label.includes('programming') || label.includes('code') || label.includes('technology')) {
+        // For tech/programming: use the question directly with tech context
+        imagePrompt = `${question}, technical diagram, professional illustration, detailed visualization, high quality, educational`;
+      } else if (label.includes('food')) {
+        // For food: extract the food item from question
+        imagePrompt = `${question}, professional food photography, detailed close-up, high quality, appetizing presentation`;
+      } else if (label.includes('science')) {
+        // For science: create detailed scientific visualization
+        imagePrompt = `${question}, scientific diagram, detailed illustration, educational visualization, technical drawing, high quality`;
+      } else if (label.includes('nature')) {
+        imagePrompt = `${question}, nature photography, detailed view, high quality, professional`;
+      } else if (label.includes('health') || label.includes('fitness')) {
+        imagePrompt = `${question}, professional health illustration, clear diagram, educational, high quality`;
+      } else if (label.includes('business')) {
+        imagePrompt = `${question}, professional business illustration, clean design, high quality`;
+      } else if (label.includes('education')) {
+        imagePrompt = `${question}, educational diagram, clear illustration, teaching visual, high quality`;
+      } else if (label.includes('art')) {
+        imagePrompt = `${question}, artistic visualization, creative illustration, high quality`;
+      } else if (label.includes('music')) {
+        imagePrompt = `${question}, musical illustration, professional diagram, high quality`;
+      } else if (label.includes('space')) {
+        imagePrompt = `${question}, space visualization, scientific illustration, detailed diagram, high quality`;
+      } else {
+        // Generic: use the question directly for maximum relevance
+        imagePrompt = `${question}, detailed illustration, professional diagram, educational visualization, high quality`;
+      }
+      
+      // Generate AI image with unique seed for each
+      const seed = Date.now() + i;
+      const generatedImage = generateAIImage(imagePrompt, seed);
+      
+      images.push({
+        url: generatedImage.url,
+        label: match.category.label,
+        relevance: match.matchCount,
+        photographer: generatedImage.photographer,
+        source: generatedImage.source,
+        prompt: imagePrompt // Store the prompt for debugging
+      });
+    }
+    
+    console.log(`Generated ${images.length} AI images for "${question}"`); 
+    console.log(`Prompts used: ${images.map(img => img.prompt).join(' | ')}`);
+    return images;
+  }
+  
+  // Fallback: If no specific topics found, generate generic AI image
+  console.log(`No matched topics for "${question}", using generic AI image`);
+  const genericPrompt = `${question}, educational illustration, professional quality, realistic`;
+  const genericImage = generateAIImage(genericPrompt, Date.now());
+  
+  return [{
+    url: genericImage.url,
+    label: 'General Topic',
+    relevance: 0,
+    photographer: 'AI Generated',
+    source: 'pollinations.ai',
+    prompt: genericPrompt
+  }];
+}
+
 async function generateAvatarResponse(question) {
   try {
     console.log("Processing question:", question);
@@ -87,12 +348,17 @@ async function generateAvatarResponse(question) {
       const validatedResponse = responseSchema.parse(parsedResponse);
       console.log("Successfully parsed and validated response");
       
+      // Add image URLs to the response
+      const responseText = validatedResponse.messages.map(m => m.text).join(' ');
+      validatedResponse.images = await generateImageUrls(question, responseText);
+      console.log("Generated images:", validatedResponse.images);
+      
       return validatedResponse;
     } catch (parseError) {
       // If parsing fails, create a default response
       console.error("Error parsing Gemini response:", parseError);
       console.error("Raw response that failed to parse:", text);
-      return {
+      const defaultResponse = {
         messages: [
           {
             text: text || "Hello! I'm your AI assistant, ready to help with any topic you'd like to discuss.",
@@ -101,6 +367,8 @@ async function generateAvatarResponse(question) {
           }
         ]
       };
+      defaultResponse.images = await generateImageUrls(question, text);
+      return defaultResponse;
     }
   } catch (error) {
     console.error("Error generating response with Gemini:", error);
