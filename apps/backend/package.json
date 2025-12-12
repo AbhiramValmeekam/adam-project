@@ -1,0 +1,32 @@
+{
+  "name": "digital-human-backend",
+  "version": "1.0.0",
+  "type": "module",
+  "license": "MIT",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "nodemon server.js --ext js",
+    "test-gemini": "node test_gemini_key.js",
+    "list-models": "node list_models.js",
+    "simple-test": "node simple_gemini_test.js",
+    "test-tts": "node test_local_tts.js",
+    "test-images": "node test_image_search.js",
+    "test-avatar-images": "node test_avatar_with_images.js"
+  },
+  "dependencies": {
+    "@google-cloud/speech": "^6.7.0",
+    "@google/generative-ai": "^0.24.1",
+    "@langchain/openai": "^0.0.12",
+    "cors": "^2.8.5",
+    "dotenv": "^16.3.1",
+    "express": "^4.18.2",
+    "googleapis": "^126.0.1",
+    "langchain": "^0.1.4",
+    "openai": "^4.11.1",
+    "say": "^0.16.0",
+    "zod": "^3.22.4"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.1"
+  }
+}
