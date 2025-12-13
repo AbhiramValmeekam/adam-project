@@ -211,119 +211,126 @@ async function fetchPexelsImages(searchQuery, count = 2) {
 
 // Function to extract keywords and generate image data with labels
 async function generateImageUrls(question, responseText) {
-  const text = (question + ' ' + responseText).toLowerCase();
-  const images = [];
+  // Extract the core subject from the question
+  const coreSubject = extractCoreSubject(question);
   
-  // Common topic categories with keywords - improved matching
-  const topicCategories = [
-    { keywords: ['code', 'coding', 'programming', 'software', 'developer', 'computer', 'algorithm', 'function', 'variable', 'debug', 'javascript', 'python', 'java'], label: 'Programming & Code', imageUrl: 'https://picsum.photos/400/300?random=' },
-    { keywords: ['nature', 'tree', 'forest', 'mountain', 'ocean', 'landscape', 'environment', 'wildlife', 'plants', 'natural'], label: 'Nature & Landscape', imageUrl: 'https://picsum.photos/400/300?random=' },
-    { keywords: ['science', 'research', 'experiment', 'laboratory', 'chemistry', 'physics', 'biology', 'scientific'], label: 'Science & Research', imageUrl: 'https://picsum.photos/400/300?random=' },
-    { keywords: ['business', 'finance', 'money', 'economy', 'marketing', 'startup', 'entrepreneur', 'corporate'], label: 'Business & Finance', imageUrl: 'https://picsum.photos/400/300?random=' },
-    { keywords: ['art', 'painting', 'design', 'creative', 'artist', 'museum', 'drawing', 'artistic'], label: 'Art & Design', imageUrl: 'https://picsum.photos/400/300?random=' },
-    { keywords: ['travel', 'vacation', 'tourism', 'destination', 'journey', 'adventure', 'trip', 'explore'], label: 'Travel & Adventure', imageUrl: 'https://picsum.photos/400/300?random=' },
-    { keywords: ['food', 'cooking', 'recipe', 'restaurant', 'cuisine', 'meal', 'dish', 'dosa', 'idli', 'indian', 'breakfast', 'dinner'], label: 'Food & Cuisine', imageUrl: 'https://picsum.photos/400/300?random=' },
-    { keywords: ['health', 'fitness', 'exercise', 'wellness', 'medical', 'yoga', 'workout', 'healthy'], label: 'Health & Fitness', imageUrl: 'https://picsum.photos/400/300?random=' },
-    { keywords: ['technology', 'tech', 'innovation', 'digital', 'ai', 'robot', 'artificial intelligence', 'machine learning'], label: 'Technology & Innovation', imageUrl: 'https://picsum.photos/400/300?random=' },
-    { keywords: ['education', 'learning', 'study', 'school', 'university', 'student', 'teaching', 'academic'], label: 'Education & Learning', imageUrl: 'https://picsum.photos/400/300?random=' },
-    { keywords: ['music', 'song', 'instrument', 'concert', 'melody', 'audio', 'band', 'guitar', 'piano'], label: 'Music & Performance', imageUrl: 'https://picsum.photos/400/300?random=' },
-    { keywords: ['space', 'astronomy', 'planet', 'star', 'galaxy', 'universe', 'cosmos', 'nasa', 'rocket'], label: 'Space & Astronomy', imageUrl: 'https://picsum.photos/400/300?random=' },
-    { keywords: ['sports', 'game', 'football', 'basketball', 'cricket', 'athlete', 'competition', 'soccer'], label: 'Sports & Athletics', imageUrl: 'https://picsum.photos/400/300?random=' },
-    { keywords: ['architecture', 'building', 'construction', 'design', 'structure', 'skyscraper'], label: 'Architecture & Buildings', imageUrl: 'https://picsum.photos/400/300?random=' },
-    { keywords: ['animal', 'pet', 'dog', 'cat', 'bird', 'wildlife', 'zoo'], label: 'Animals & Wildlife', imageUrl: 'https://picsum.photos/400/300?random=' },
-    { keywords: ['car', 'vehicle', 'automobile', 'transportation', 'driving'], label: 'Vehicles & Transportation', imageUrl: 'https://picsum.photos/400/300?random=' },
-    { keywords: ['beach', 'sea', 'ocean', 'sand', 'wave', 'coast'], label: 'Beach & Ocean', imageUrl: 'https://picsum.photos/400/300?random=' },
-    { keywords: ['city', 'urban', 'metropolitan', 'downtown', 'skyline'], label: 'City & Urban Life', imageUrl: 'https://picsum.photos/400/300?random=' },
+  console.log(`Searching for images related to core subject: "${coreSubject}"`);
+  
+  // Use Wikimedia Commons as primary source for more reliable images
+  try {
+    const wikimediaImages = await fetchWikimediaImages(coreSubject, 2);
+    
+    // Process the images to ensure they're exactly relevant
+    const processedImages = wikimediaImages.map((image, index) => ({
+      url: image.url,
+      label: `Exact representation of: ${coreSubject}`,
+      photographer: image.photographer || 'Wikimedia Commons',
+      source: image.source || 'wikimedia',
+      alt: `${coreSubject} - ${image.alt || 'relevant image'}`
+    }));
+    
+    console.log(`Found ${processedImages.length} exactly relevant images for: "${coreSubject}"`);
+    return processedImages;
+  } catch (error) {
+    console.error("Error fetching Wikimedia images:", error.message);
+    
+    // Fallback to Picsum with labeled placeholders
+    const timestamp = Date.now();
+    return [
+      {
+        url: `https://picsum.photos/400/300?random=${timestamp}`,
+        label: `Topic: ${coreSubject}`,
+        photographer: 'Placeholder Image',
+        source: 'picsum',
+        alt: `Placeholder for ${coreSubject}`
+      },
+      {
+        url: `https://picsum.photos/400/300?random=${timestamp + 1}`,
+        label: `Subject: ${coreSubject}`,
+        photographer: 'Placeholder Image',
+        source: 'picsum',
+        alt: `Placeholder for ${coreSubject}`
+      }
+    ];
+  }
+}
+
+// Helper function to extract the exact core subject from a question
+function extractCoreSubject(question) {
+  // Clean and normalize the question
+  let cleanQuestion = question.trim();
+  
+  // Remove common question prefixes
+  const prefixesToRemove = [
+    'what is', 'what are', 'explain', 'tell me about', 'describe', 
+    'how does', 'how do', 'can you explain', 'please explain',
+    'what is the', 'what are the', 'define', 'give me information about',
+    'i want to know about', 'i would like to learn about',
+    'show me', 'display', 'illustrate', 'demonstrate'
   ];
   
-  // Find matching topics
-  const matchedCategories = [];
-  for (const category of topicCategories) {
-    const matchCount = category.keywords.filter(keyword => text.includes(keyword)).length;
-    if (matchCount > 0) {
-      matchedCategories.push({ category, matchCount });
+  for (const prefix of prefixesToRemove) {
+    if (cleanQuestion.toLowerCase().startsWith(prefix)) {
+      cleanQuestion = cleanQuestion.substring(prefix.length).trim();
+      break;
     }
   }
   
-  // Sort by match count (most relevant first)
-  matchedCategories.sort((a, b) => b.matchCount - a.matchCount);
+  // Remove trailing punctuation
+  cleanQuestion = cleanQuestion.replace(/[?!.]+$/, '').trim();
   
-  // Generate image data from top matches using AI image generation
-  if (matchedCategories.length > 0) {
-    const images = [];
-    
-    // Get top 2 matches
-    const topMatches = matchedCategories.slice(0, 2);
-    
-    for (let i = 0; i < topMatches.length; i++) {
-      const match = topMatches[i];
-      
-      // Create a highly specific prompt based on the actual user question
-      // This ensures images are directly relevant to what the user asked
-      let imagePrompt = '';
-      const label = match.category.label.toLowerCase();
-      
-      // Generate prompt based on the actual question for maximum relevance
-      if (label.includes('programming') || label.includes('code') || label.includes('technology')) {
-        // For tech/programming: use the question directly with tech context
-        imagePrompt = `${question}, technical diagram, professional illustration, detailed visualization, high quality, educational`;
-      } else if (label.includes('food')) {
-        // For food: extract the food item from question
-        imagePrompt = `${question}, professional food photography, detailed close-up, high quality, appetizing presentation`;
-      } else if (label.includes('science')) {
-        // For science: create detailed scientific visualization
-        imagePrompt = `${question}, scientific diagram, detailed illustration, educational visualization, technical drawing, high quality`;
-      } else if (label.includes('nature')) {
-        imagePrompt = `${question}, nature photography, detailed view, high quality, professional`;
-      } else if (label.includes('health') || label.includes('fitness')) {
-        imagePrompt = `${question}, professional health illustration, clear diagram, educational, high quality`;
-      } else if (label.includes('business')) {
-        imagePrompt = `${question}, professional business illustration, clean design, high quality`;
-      } else if (label.includes('education')) {
-        imagePrompt = `${question}, educational diagram, clear illustration, teaching visual, high quality`;
-      } else if (label.includes('art')) {
-        imagePrompt = `${question}, artistic visualization, creative illustration, high quality`;
-      } else if (label.includes('music')) {
-        imagePrompt = `${question}, musical illustration, professional diagram, high quality`;
-      } else if (label.includes('space')) {
-        imagePrompt = `${question}, space visualization, scientific illustration, detailed diagram, high quality`;
-      } else {
-        // Generic: use the question directly for maximum relevance
-        imagePrompt = `${question}, detailed illustration, professional diagram, educational visualization, high quality`;
-      }
-      
-      // Generate AI image with unique seed for each
-      const seed = Date.now() + i;
-      const generatedImage = generateAIImage(imagePrompt, seed);
-      
-      images.push({
-        url: generatedImage.url,
-        label: match.category.label,
-        relevance: match.matchCount,
-        photographer: generatedImage.photographer,
-        source: generatedImage.source,
-        prompt: imagePrompt // Store the prompt for debugging
-      });
-    }
-    
-    console.log(`Generated ${images.length} AI images for "${question}"`); 
-    console.log(`Prompts used: ${images.map(img => img.prompt).join(' | ')}`);
-    return images;
+  // Handle "X of Y" patterns (e.g., "process of photosynthesis" -> "photosynthesis")
+  const ofPattern = /^(.*)\s+of\s+(.+)$/;
+  const ofMatch = cleanQuestion.match(ofPattern);
+  if (ofMatch) {
+    return ofMatch[2].trim(); // Return the "Y" part
   }
   
-  // Fallback: If no specific topics found, generate generic AI image
-  console.log(`No matched topics for "${question}", using generic AI image`);
-  const genericPrompt = `${question}, educational illustration, professional quality, realistic`;
-  const genericImage = generateAIImage(genericPrompt, Date.now());
+  // Handle "X in Y" patterns (e.g., "photosynthesis in plants" -> "photosynthesis")
+  const inPattern = /^(.*)\s+in\s+(.+)$/;
+  const inMatch = cleanQuestion.match(inPattern);
+  if (inMatch) {
+    return inMatch[1].trim(); // Return the "X" part
+  }
   
-  return [{
-    url: genericImage.url,
-    label: 'General Topic',
-    relevance: 0,
-    photographer: 'AI Generated',
-    source: 'pollinations.ai',
-    prompt: genericPrompt
-  }];
+  // Split into words
+  const words = cleanQuestion.split(/\s+/);
+  
+  // If it's a short phrase (1-3 words), use it directly
+  if (words.length <= 3) {
+    return cleanQuestion;
+  }
+  
+  // For longer phrases, try to identify the core noun phrase
+  // Look for the main subject by finding key nouns
+  const keyNouns = [
+    'algorithm', 'process', 'system', 'technology', 'method', 'technique',
+    'theory', 'concept', 'principle', 'law', 'function', 'structure',
+    'mechanism', 'procedure', 'approach', 'model', 'framework', 'design',
+    'architecture', 'component', 'element', 'feature', 'aspect', 'property',
+    'characteristic', 'attribute', 'quality', 'trait', 'behavior', 'pattern',
+    'relationship', 'connection', 'interaction', 'effect', 'impact', 'result',
+    'outcome', 'benefit', 'advantage', 'disadvantage', 'limitation', 'challenge',
+    'problem', 'solution', 'application', 'implementation', 'example', 'case',
+    'computer', 'machine', 'device', 'engine', 'robot', 'software', 'program',
+    'network', 'internet', 'web', 'database', 'server', 'cloud', 'ai', 'intelligence',
+    'brain', 'mind', 'thought', 'idea', 'thought', 'philosophy', 'science',
+    'mathematics', 'physics', 'chemistry', 'biology', 'medicine', 'health',
+    'business', 'economics', 'finance', 'market', 'investment', 'trading',
+    'history', 'culture', 'art', 'music', 'literature', 'poetry', 'writing'
+  ];
+  
+  // Look for key nouns in the phrase
+  for (let i = words.length - 1; i >= 0; i--) {
+    const word = words[i].toLowerCase().replace(/[^a-zA-Z]/g, '');
+    if (keyNouns.includes(word)) {
+      // Return the part before the key noun
+      return words.slice(0, i + 1).join(' ');
+    }
+  }
+  
+  // If no key noun found, return the first 3-4 words as the core subject
+  return words.slice(0, Math.min(4, words.length)).join(' ');
 }
 
 async function generateAvatarResponse(question) {
