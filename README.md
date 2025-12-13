@@ -1,4 +1,4 @@
-# Adam Project - Talking Avatar with AI
+# Adam Project - YOUR AI PERSONAL TEACHER
 
 This project is a talking avatar powered by Google's Gemini AI that can engage in conversations with users. The avatar can speak, listen, and express emotions through facial expressions and animations. It uses Gemini for natural language processing, local TTS for voice generation, and Rhubarb Lip Sync for lip synchronization.
 
