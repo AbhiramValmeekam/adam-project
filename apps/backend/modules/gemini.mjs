@@ -448,4 +448,145 @@ async function generateChatSummary(chatHistory) {
   }
 }
 
-export { generateAvatarResponse, generateChatSummary };
+// New function for generating retention tests
+async function generateRetentionTest(chatHistory) {
+  try {
+    console.log("Generating retention test based on chat history...");
+    
+    // Use the gemini 2.5 flash model as requested
+    const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
+    
+    // Format the chat history for the prompt
+    const formattedHistory = chatHistory.map(msg => {
+      const sender = msg.sender === 'user' ? 'User' : msg.sender === 'ai' ? 'AI Assistant' : 'System';
+      return `${sender}: ${msg.text}`;
+    }).join('\n');
+    
+    const retentionTestTemplate = `
+    You are an intelligent and knowledgeable educator who creates comprehensive retention tests. 
+    Based on the conversation history provided below, create a test that assesses the user's understanding of the material discussed.
+    
+    Conversation History:
+    ${formattedHistory}
+    
+    Please follow these guidelines:
+    1. Create exactly 5 multiple-choice questions
+    2. Each question should have 4 options (A, B, C, D)
+    3. Clearly indicate the correct answer for each question
+    4. Make the questions challenging but fair, covering different aspects of the topics discussed
+    5. Include a mix of question types:
+       - Factual recall questions
+       - Conceptual understanding questions
+       - Application-based questions
+    6. Provide detailed explanations for each answer
+    7. Format the response as valid JSON with the following structure:
+    
+    {
+      "testTitle": "A descriptive title for the test based on the conversation topics",
+      "questions": [
+        {
+          "id": 1,
+          "question": "Question text here",
+          "options": [
+            {"id": "A", "text": "Option A text"},
+            {"id": "B", "text": "Option B text"},
+            {"id": "C", "text": "Option C text"},
+            {"id": "D", "text": "Option D text"}
+          ],
+          "correctAnswer": "A",
+          "explanation": "Detailed explanation of why the answer is correct and why other options are incorrect",
+          "topic": "The main topic this question addresses"
+        }
+      ]
+    }
+    
+    Generate a comprehensive retention test based on the conversation history following this format exactly.
+    `;
+    
+    console.log("Sending retention test prompt to Gemini...");
+    const result = await model.generateContent(retentionTestTemplate);
+    const response = await result.response;
+    const testText = response.text();
+    
+    console.log("Raw Gemini retention test response:", testText.substring(0, 100) + "...");
+    
+    // Try to parse the JSON response
+    try {
+      // Extract JSON from potential markdown code blocks
+      let cleanTestText = testText.trim();
+      if (cleanTestText.startsWith("```json")) {
+        cleanTestText = cleanTestText.substring(7);
+      }
+      if (cleanTestText.endsWith("```")) {
+        cleanTestText = cleanTestText.substring(0, cleanTestText.length - 3);
+      }
+      
+      const parsedTest = JSON.parse(cleanTestText);
+      console.log("Successfully parsed and validated retention test");
+      return parsedTest;
+    } catch (parseError) {
+      console.error("Error parsing retention test response:", parseError);
+      console.error("Raw response that failed to parse:", testText);
+      // Return a default test structure
+      return {
+        testTitle: "General Knowledge Test",
+        questions: []
+      };
+    }
+  } catch (error) {
+    console.error("Error generating retention test:", error);
+    throw error;
+  }
+}
+
+// New function for generating personalized feedback
+async function generatePersonalizedFeedback(testResults, chatHistory) {
+  try {
+    console.log("Generating personalized feedback based on test results...");
+    
+    // Use the gemini 2.5 flash model as requested
+    const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
+    
+    // Format the chat history for the prompt
+    const formattedHistory = chatHistory.map(msg => {
+      const sender = msg.sender === 'user' ? 'User' : msg.sender === 'ai' ? 'AI Assistant' : 'System';
+      return `${sender}: ${msg.text}`;
+    }).join('\n');
+    
+    const feedbackTemplate = `
+    You are an intelligent and supportive educator who provides personalized feedback on test performance. 
+    Based on the test results and conversation history provided below, give constructive feedback and specific improvement suggestions.
+    
+    Conversation History:
+    ${formattedHistory}
+    
+    Test Results:
+    ${JSON.stringify(testResults, null, 2)}
+    
+    Please provide:
+    1. Overall performance assessment with a score percentage
+    2. Specific areas of strength demonstrated by correct answers
+    3. Detailed analysis of mistakes and misconceptions revealed by incorrect answers
+    4. Personalized suggestions on how to improve in weak areas
+    5. Study techniques and strategies tailored to the user's learning patterns
+    6. Additional resources or topics to explore for deeper understanding
+    7. Encouraging closing remarks that motivate continued learning
+    
+    Format your response in a natural, conversational way that would be suitable for speech by an AI avatar.
+    Be specific and actionable in your suggestions, referencing the actual topics discussed in the conversation.
+    `;
+    
+    console.log("Sending feedback prompt to Gemini...");
+    const result = await model.generateContent(feedbackTemplate);
+    const response = await result.response;
+    const feedbackText = response.text();
+    
+    console.log("Successfully generated personalized feedback");
+    return feedbackText;
+  } catch (error) {
+    console.error("Error generating personalized feedback:", error);
+    throw error;
+  }
+}
+
+export { generateAvatarResponse, generateChatSummary, generateRetentionTest, generatePersonalizedFeedback };

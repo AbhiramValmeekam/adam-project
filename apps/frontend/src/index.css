@@ -14,5 +14,25 @@
 body {
   margin: 0;
   background-color: #060606;
-  background-image: linear-gradient(19deg, #060606 0%, #ddd6f3 100%);
+  background-image: linear-gradient(19deg, #060606 0%, #1a1a2e 100%);
+  font-family: 'Inter', sans-serif;
+  overflow-x: hidden;
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #1e1e2e;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #4a4a8a;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #6a6aaa;
 }

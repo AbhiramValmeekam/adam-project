@@ -1,12 +1,12 @@
-import cors from "cors";
-import dotenv from "dotenv";
 import express from "express";
-import { generateAvatarResponse, generateChatSummary } from "./modules/gemini.mjs";
+import cors from "cors";
+import { generateAvatarResponse, generateChatSummary, generateRetentionTest, generatePersonalizedFeedback } from "./modules/gemini.mjs";
+import { convertTextToSpeech } from "./modules/local-tts.mjs";
 import { lipSync } from "./modules/lip-sync.mjs";
+import dotenv from "dotenv";
 
 dotenv.config();
 
-// Simple in-memory cache for responses
 const responseCache = new Map();
 const CACHE_TTL = 5 * 60 * 1000; // 5 minutes cache
 
@@ -179,6 +179,53 @@ app.post("/summary", async (req, res) => {
   }
 });
 
+// New endpoint for generating retention tests
+app.post("/retention-test/generate", async (req, res) => {
+  try {
+    const { chatHistory } = req.body;
+    
+    if (!chatHistory || !Array.isArray(chatHistory)) {
+      return res.status(400).send({ error: "Invalid chat history provided" });
+    }
+    
+    if (chatHistory.length === 0) {
+      return res.status(400).send({ error: "Chat history is empty. Please have a conversation first." });
+    }
+    
+    console.log("Received retention test request with", chatHistory.length, "messages");
+    
+    // Generate retention test using Gemini
+    const test = await generateRetentionTest(chatHistory);
+    
+    res.send(test);
+  } catch (error) {
+    console.error("Error generating retention test:", error);
+    res.status(500).send({ error: "Failed to generate retention test" });
+  }
+});
+
+// New endpoint for generating personalized feedback
+app.post("/retention-test/feedback", async (req, res) => {
+  try {
+    const { testResults, chatHistory } = req.body;
+    
+    if (!testResults || !chatHistory) {
+      return res.status(400).send({ error: "Test results and chat history are required" });
+    }
+    
+    console.log("Received feedback request for test results");
+    
+    // Generate personalized feedback using Gemini
+    const feedback = await generatePersonalizedFeedback(testResults, chatHistory);
+    
+    res.send({ feedback });
+  } catch (error) {
+    console.error("Error generating personalized feedback:", error);
+    res.status(500).send({ error: "Failed to generate personalized feedback" });
+  }
+});
+
 app.listen(port, () => {
   console.log(`Jack are listening on port ${port}`);
+  console.log("Yo...");
 });
