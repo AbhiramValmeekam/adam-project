@@ -278,54 +278,114 @@ async function fetchPexelsImages(searchQuery, count = 2) {
   }
 }
 
+// Function to use Gemini to extract the most relevant image search terms
+async function extractImageSearchTerms(question, responseText = "") {
+  try {
+    const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
+    
+    const prompt = `You are an expert at extracting the most relevant search terms for finding images.
+
+Given a user's question and optionally their response, extract 1-3 specific, concrete search terms that would find the MOST RELEVANT images for this topic.
+
+IMPORTANT RULES:
+1. Extract the MAIN SUBJECT or KEY CONCEPT that would be visually represented
+2. Use specific, concrete terms (e.g., "photosynthesis" not "biology", "Eiffel Tower" not "architecture")
+3. Avoid generic words like "concept", "theory", "process" unless they're essential
+4. For "how to" questions, extract the ACTION and OBJECT (e.g., "baking bread", "swimming technique")
+5. For "what is" questions, extract the SPECIFIC THING (e.g., "black hole", "Python programming")
+6. For comparisons, extract BOTH items (e.g., "solar vs wind energy")
+7. Return ONLY the search terms, separated by commas if multiple
+8. Maximum 3 search terms, each 1-3 words
+9. NO explanations, NO markdown, just the search terms
+
+Examples:
+Question: "What is photosynthesis?"
+Search terms: photosynthesis, plant photosynthesis, chloroplast
+
+Question: "How to bake bread?"
+Search terms: baking bread, bread making, bread recipe
+
+Question: "Tell me about the Eiffel Tower"
+Search terms: Eiffel Tower, Paris Eiffel Tower, Eiffel Tower structure
+
+Question: "What is artificial intelligence?"
+Search terms: artificial intelligence, AI technology, machine learning
+
+Question: "${question}"
+${responseText ? `Response context: "${responseText.substring(0, 200)}..."` : ''}
+
+Extract the most relevant image search terms:`;
+
+    const result = await model.generateContent(prompt);
+    const response = await result.response;
+    const extractedTerms = response.text().trim();
+    
+    // Clean up the response - remove any markdown, quotes, or extra text
+    let cleanTerms = extractedTerms
+      .replace(/^["']|["']$/g, '') // Remove surrounding quotes
+      .replace(/^\*\*|\*\*$/g, '') // Remove markdown bold
+      .replace(/^`|`$/g, '') // Remove code blocks
+      .replace(/^Search terms?:?\s*/i, '') // Remove "Search terms:" prefix
+      .trim();
+    
+    // If multiple terms, take the first one (most relevant)
+    if (cleanTerms.includes(',')) {
+      cleanTerms = cleanTerms.split(',')[0].trim();
+    }
+    
+    // Limit to 5 words max
+    const words = cleanTerms.split(/\s+/);
+    if (words.length > 5) {
+      cleanTerms = words.slice(0, 5).join(' ');
+    }
+    
+    console.log(`✅ Gemini extracted search terms: "${cleanTerms}"`);
+    return cleanTerms;
+  } catch (error) {
+    console.error(`❌ Error extracting search terms with Gemini:`, error.message);
+    return null;
+  }
+}
+
+// Function to clean search terms by removing common words that reduce relevance
+function cleanSearchTerms(terms) {
+  if (!terms) return terms;
+  
+  // Remove common filler words that don't help with image search
+  const fillerWords = ['the', 'a', 'an', 'is', 'are', 'was', 'were', 'be', 'been', 'being', 
+                       'have', 'has', 'had', 'do', 'does', 'did', 'will', 'would', 'could', 
+                       'should', 'may', 'might', 'can', 'about', 'what', 'how', 'why', 'when', 
+                       'where', 'which', 'who', 'this', 'that', 'these', 'those', 'it', 'its'];
+  
+  const words = terms.split(/\s+/);
+  const cleaned = words.filter(word => {
+    const lower = word.toLowerCase().replace(/[^a-z]/g, '');
+    return !fillerWords.includes(lower) && lower.length > 1;
+  });
+  
+  // If we removed too many words, keep the original
+  if (cleaned.length === 0 || cleaned.length < words.length * 0.3) {
+    return terms;
+  }
+  
+  return cleaned.join(' ');
+}
+
 // Enhanced function to extract keywords and generate exactly relevant image data with labels
 async function generateImageUrls(question, responseText) {
-  // Extract the core subject from the question with maximum precision
-  const coreSubject = extractCoreSubject(question);
+  console.log(`🔍 Generating relevant images for question: "${question}"`);
   
-  console.log(`🔍 Searching for exactly relevant images for core subject: "${coreSubject}"`);
+  // Use Gemini to extract the most relevant search terms for images
+  let searchTerms = await extractImageSearchTerms(question, responseText);
   
-  // Enhanced approach: Focus primarily on the core subject for maximum relevance
-  let searchTerms = coreSubject;
-  
-  // Only use response text analysis if it provides more specific terms
-  if (responseText && responseText.length > 0) {
-    // Extract key concepts from both question and response
-    const combinedText = `${question} ${responseText}`;
-    
-    // Try to identify specific technical terms, names, or concepts
-    const technicalTerms = extractTechnicalTerms(combinedText);
-    if (technicalTerms.length > 0) {
-      // Check if any technical term is more specific than the core subject
-      const moreSpecificTerm = technicalTerms.find(term => 
-        term.length > coreSubject.length && 
-        term.toLowerCase().includes(coreSubject.toLowerCase())
-      );
-      
-      if (moreSpecificTerm) {
-        searchTerms = moreSpecificTerm;
-      }
-    } else {
-      // Fallback to entity extraction
-      const entities = extractNamedEntities(combinedText);
-      if (entities.length > 0) {
-        // Check if any entity is more specific than the core subject
-        const moreSpecificEntity = entities.find(entity => 
-          entity.length > coreSubject.length && 
-          entity.toLowerCase().includes(coreSubject.toLowerCase())
-        );
-        
-        if (moreSpecificEntity) {
-          searchTerms = moreSpecificEntity;
-        }
-      }
-    }
+  // Fallback to core subject extraction if Gemini extraction fails
+  if (!searchTerms || searchTerms.length < 3) {
+    console.log(`⚠️  Gemini extraction failed or too short, using fallback extraction`);
+    searchTerms = extractCoreSubject(question);
   }
   
-  // Ensure search terms are meaningful and relevant
-  if (searchTerms.length < 3 || searchTerms.split(/\s+/).length < 1) {
-    searchTerms = coreSubject;
-  }
+  // Clean up search terms - remove common words that reduce relevance
+  searchTerms = cleanSearchTerms(searchTerms);
   
   console.log(`🎯 Using maximally relevant search terms: "${searchTerms}"`);
   
@@ -717,21 +777,79 @@ LANGUAGE INSTRUCTIONS FOR ENGLISH:
     // Add explicit language instruction at the start of prompt for Telugu/Hindi
     let finalPrompt = languageSpecificTemplate;
     if (normalizedLang === "telugu" || normalizedLang === "te") {
-      finalPrompt = `⚠️⚠️⚠️ CRITICAL LANGUAGE REQUIREMENT ⚠️⚠️⚠️
-The user has SELECTED TELUGU as their language preference.
-You MUST respond ENTIRELY in Telugu script (తెలుగు లిపి).
-DO NOT use English words, English script, or any other language.
-Even if the user's question appears in English (due to transcription), you MUST still respond in Telugu.
-This is NON-NEGOTIABLE. The user expects a Telugu response.
+      finalPrompt = `🚨🚨🚨 ABSOLUTE LANGUAGE REQUIREMENT - READ THIS FIRST 🚨🚨🚨
+
+THE USER HAS SELECTED TELUGU LANGUAGE.
+YOU MUST RESPOND 100% IN TELUGU SCRIPT (తెలుగు లిపి) ONLY.
+
+CRITICAL RULES:
+1. EVERY SINGLE WORD in your response MUST be in Telugu script (తెలుగు)
+2. DO NOT use ANY English words, English letters, or English script
+3. DO NOT use transliteration (English letters for Telugu sounds)
+4. Even if the user's question is in English, YOU MUST respond in Telugu
+5. The "text" field in your JSON response MUST contain ONLY Telugu script characters
+6. If you cannot respond in Telugu script, you have FAILED this request
+
+EXAMPLE OF CORRECT RESPONSE:
+{
+  "messages": [
+    {
+      "text": "నమస్కారం! మీ ప్రశ్నకు సమాధానం ఇవ్వడానికి నేను సంతోషిస్తున్నాను.",
+      "facialExpression": "smile",
+      "animation": "TalkingOne"
+    }
+  ]
+}
+
+EXAMPLE OF WRONG RESPONSE (DO NOT DO THIS):
+{
+  "messages": [
+    {
+      "text": "Hello! I can help you with your question.",
+      ...
+    }
+  ]
+}
+
+REMEMBER: Telugu script = తెలుగు లిపి. Use ONLY these characters: తెలుగు అక్షరాలు.
 
 ${languageSpecificTemplate}`;
     } else if (normalizedLang === "hindi" || normalizedLang === "hi") {
-      finalPrompt = `⚠️⚠️⚠️ CRITICAL LANGUAGE REQUIREMENT ⚠️⚠️⚠️
-The user has SELECTED HINDI as their language preference.
-You MUST respond ENTIRELY in Hindi script (हिंदी/Devanagari).
-DO NOT use English words, English script, or any other language.
-Even if the user's question appears in English (due to transcription), you MUST still respond in Hindi.
-This is NON-NEGOTIABLE. The user expects a Hindi response.
+      finalPrompt = `🚨🚨🚨 ABSOLUTE LANGUAGE REQUIREMENT - READ THIS FIRST 🚨🚨🚨
+
+THE USER HAS SELECTED HINDI LANGUAGE.
+YOU MUST RESPOND 100% IN HINDI SCRIPT (हिंदी/Devanagari) ONLY.
+
+CRITICAL RULES:
+1. EVERY SINGLE WORD in your response MUST be in Hindi script (हिंदी)
+2. DO NOT use ANY English words, English letters, or English script
+3. DO NOT use transliteration (English letters for Hindi sounds)
+4. Even if the user's question is in English, YOU MUST respond in Hindi
+5. The "text" field in your JSON response MUST contain ONLY Hindi script characters
+6. If you cannot respond in Hindi script, you have FAILED this request
+
+EXAMPLE OF CORRECT RESPONSE:
+{
+  "messages": [
+    {
+      "text": "नमस्ते! मैं आपके प्रश्न का उत्तर देने में आपकी सहायता कर सकता हूं।",
+      "facialExpression": "smile",
+      "animation": "TalkingOne"
+    }
+  ]
+}
+
+EXAMPLE OF WRONG RESPONSE (DO NOT DO THIS):
+{
+  "messages": [
+    {
+      "text": "Hello! I can help you with your question.",
+      ...
+    }
+  ]
+}
+
+REMEMBER: Hindi script = हिंदी लिपि. Use ONLY these characters: हिंदी अक्षर.
 
 ${languageSpecificTemplate}`;
     }
@@ -755,29 +873,55 @@ ${languageSpecificTemplate}`;
       console.log(`[Gemini] [${requestId}] ✅ Successfully parsed and validated response`);
       console.log(`[Gemini] [${requestId}] Response messages:`, validatedResponse.messages.map(m => m.text.substring(0, 50) + "..."));
       
-      // Validate language for Hindi/Telugu responses - use normalized language
+      // CRITICAL: Validate language for Hindi/Telugu responses - use normalized language
       const checkLang = normalizedLang;
       if (checkLang === "telugu" || checkLang === "te") {
         const teluguScriptRegex = /[\u0C00-\u0C7F]/;
         const allMessages = validatedResponse.messages.map(m => m.text).join(' ');
         const hasTeluguScript = teluguScriptRegex.test(allMessages);
+        
+        console.log(`[Gemini] [${requestId}] ===== Validating Telugu Response =====`);
+        console.log(`[Gemini] [${requestId}] All messages combined: "${allMessages.substring(0, 200)}..."`);
+        console.log(`[Gemini] [${requestId}] Contains Telugu script: ${hasTeluguScript ? '✅ YES' : '❌ NO'}`);
+        
         if (!hasTeluguScript) {
-          console.warn(`[Gemini] [${requestId}] ⚠️ WARNING: Response does not contain Telugu script! Response: ${allMessages.substring(0, 100)}`);
-          // Force a Telugu response
-          validatedResponse.messages[0].text = "క్షమించండి, నేను తెలుగులో మాత్రమే ప్రతిస్పందించగలను. దయచేసి మీ ప్రశ్నను తెలుగులో అడగండి.";
+          console.error(`[Gemini] [${requestId}] ❌ CRITICAL ERROR: Response does NOT contain Telugu script!`);
+          console.error(`[Gemini] [${requestId}] Full response text: "${allMessages}"`);
+          console.error(`[Gemini] [${requestId}] ⚠️ FORCING Telugu response - replacing with Telugu text`);
+          
+          // Force a Telugu response - use a proper Telugu message
+          const teluguFallback = question && question.trim() ? 
+            `నమస్కారం! మీ ప్రశ్నకు సంబంధించి, నేను తెలుగులో సమాధానం ఇవ్వగలను. దయచేసి మీ ప్రశ్నను తెలుగులో అడగండి.` :
+            `నమస్కారం! నేను తెలుగులో మాత్రమే ప్రతిస్పందించగలను. దయచేసి మీ ప్రశ్నను తెలుగులో అడగండి.`;
+          
+          validatedResponse.messages[0].text = teluguFallback;
+          console.log(`[Gemini] [${requestId}] ✅ Replaced with Telugu text: "${teluguFallback}"`);
         } else {
-          console.log(`[Gemini] [${requestId}] ✅ Response contains Telugu script`);
+          console.log(`[Gemini] [${requestId}] ✅ Response contains Telugu script - validation passed`);
         }
       } else if (checkLang === "hindi" || checkLang === "hi") {
         const hindiScriptRegex = /[\u0900-\u097F]/;
         const allMessages = validatedResponse.messages.map(m => m.text).join(' ');
         const hasHindiScript = hindiScriptRegex.test(allMessages);
+        
+        console.log(`[Gemini] [${requestId}] ===== Validating Hindi Response =====`);
+        console.log(`[Gemini] [${requestId}] All messages combined: "${allMessages.substring(0, 200)}..."`);
+        console.log(`[Gemini] [${requestId}] Contains Hindi script: ${hasHindiScript ? '✅ YES' : '❌ NO'}`);
+        
         if (!hasHindiScript) {
-          console.warn(`[Gemini] [${requestId}] ⚠️ WARNING: Response does not contain Hindi script! Response: ${allMessages.substring(0, 100)}`);
-          // Force a Hindi response
-          validatedResponse.messages[0].text = "क्षमा करें, मैं केवल हिंदी में उत्तर दे सकता हूं। कृपया अपना प्रश्न हिंदी में पूछें।";
+          console.error(`[Gemini] [${requestId}] ❌ CRITICAL ERROR: Response does NOT contain Hindi script!`);
+          console.error(`[Gemini] [${requestId}] Full response text: "${allMessages}"`);
+          console.error(`[Gemini] [${requestId}] ⚠️ FORCING Hindi response - replacing with Hindi text`);
+          
+          // Force a Hindi response - use a proper Hindi message
+          const hindiFallback = question && question.trim() ? 
+            `नमस्ते! आपके प्रश्न के संबंध में, मैं हिंदी में उत्तर दे सकता हूं। कृपया अपना प्रश्न हिंदी में पूछें।` :
+            `नमस्ते! मैं केवल हिंदी में उत्तर दे सकता हूं। कृपया अपना प्रश्न हिंदी में पूछें।`;
+          
+          validatedResponse.messages[0].text = hindiFallback;
+          console.log(`[Gemini] [${requestId}] ✅ Replaced with Hindi text: "${hindiFallback}"`);
         } else {
-          console.log(`[Gemini] [${requestId}] ✅ Response contains Hindi script`);
+          console.log(`[Gemini] [${requestId}] ✅ Response contains Hindi script - validation passed`);
         }
       }
       

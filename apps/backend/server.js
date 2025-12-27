@@ -292,14 +292,40 @@ app.post("/sts", async (req, res) => {
     console.log("Language parameter:", language);
     console.log("Language type:", typeof language);
     console.log("⚠️ CRITICAL: Gemini MUST respond in", language.toUpperCase());
+    console.log("⚠️ CRITICAL: Language value being sent:", JSON.stringify(language));
     
     const geminiResponse = await generateAvatarResponse(userMessage, language);
     
     console.log("=== Gemini Response Received ===");
     console.log("Response messages count:", geminiResponse.messages ? geminiResponse.messages.length : 0);
     if (geminiResponse.messages && geminiResponse.messages.length > 0) {
-      console.log("First message text:", geminiResponse.messages[0].text.substring(0, 200));
+      const firstMessageText = geminiResponse.messages[0].text || "";
+      console.log("First message text:", firstMessageText.substring(0, 200));
       console.log("Full first message:", JSON.stringify(geminiResponse.messages[0], null, 2));
+      
+      // Validate response language matches requested language
+      const lang = language.toLowerCase();
+      if (lang === "telugu" || lang === "te") {
+        const teluguScriptRegex = /[\u0C00-\u0C7F]/;
+        const hasTelugu = teluguScriptRegex.test(firstMessageText);
+        console.log(`[Server] ===== POST-GEMINI VALIDATION FOR TELUGU =====`);
+        console.log(`[Server] First message text: "${firstMessageText.substring(0, 200)}..."`);
+        console.log(`[Server] Contains Telugu script: ${hasTelugu ? '✅ YES' : '❌ NO'}`);
+        if (!hasTelugu) {
+          console.error(`[Server] ❌ CRITICAL: Gemini returned English despite Telugu request!`);
+          console.error(`[Server] Full message: "${firstMessageText}"`);
+        }
+      } else if (lang === "hindi" || lang === "hi") {
+        const hindiScriptRegex = /[\u0900-\u097F]/;
+        const hasHindi = hindiScriptRegex.test(firstMessageText);
+        console.log(`[Server] ===== POST-GEMINI VALIDATION FOR HINDI =====`);
+        console.log(`[Server] First message text: "${firstMessageText.substring(0, 200)}..."`);
+        console.log(`[Server] Contains Hindi script: ${hasHindi ? '✅ YES' : '❌ NO'}`);
+        if (!hasHindi) {
+          console.error(`[Server] ❌ CRITICAL: Gemini returned English despite Hindi request!`);
+          console.error(`[Server] Full message: "${firstMessageText}"`);
+        }
+      }
     }
     
     if (!geminiResponse || !geminiResponse.messages || geminiResponse.messages.length === 0) {
