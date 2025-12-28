@@ -49,3 +49,36 @@ Hello."
 [2025-12-28T23:03:04.786Z] [STT] Attempting Google STT with file: C:\Users\pmkma\AppData\Local\Temp\input_audio_1766962984701.webm
 [2025-12-28T23:03:04.788Z] [STT] Final file size for Google: 39902 bytes
 [2025-12-28T23:03:06.003Z] [STT] ✅ Google STT succeeded: "टेल मी अबाउट बर्गर!"
+[2025-12-28T23:24:32.747Z] Starting STT conversion for language: hindi
+[2025-12-28T23:24:32.748Z] Audio data size: 38936 bytes
+[2025-12-28T23:24:32.749Z] Writing audio to temp file: C:\Users\pmkma\AppData\Local\Temp\input_audio_1766964272749.webm
+[2025-12-28T23:24:32.750Z] [STT] Normalization/Conversion: C:\Users\pmkma\AppData\Local\Temp\input_audio_1766964272749.webm -> C:\Users\pmkma\AppData\Local\Temp\input_audio_1766964272749.wav
+[2025-12-28T23:24:33.103Z] [STT] WAV conversion ready: C:\Users\pmkma\AppData\Local\Temp\input_audio_1766964272749.wav (76878 bytes)
+[2025-12-28T23:24:33.104Z] [STT] Prioritizing RAW WebM for Google STT: C:\Users\pmkma\AppData\Local\Temp\input_audio_1766964272749.webm
+[2025-12-28T23:24:33.104Z] [STT] Credentials Path: ./google-tts-credentials.json
+[2025-12-28T23:24:33.106Z] [STT] Credentials File Exists: true
+[2025-12-28T23:24:33.106Z] [STT] Attempting Google STT with file: C:\Users\pmkma\AppData\Local\Temp\input_audio_1766964272749.webm
+[2025-12-28T23:24:33.107Z] [STT] Final file size for Google: 38936 bytes
+[2025-12-28T23:24:34.417Z] [STT] ✅ Google STT succeeded: "टेल मी अबाउट पिज़्ज़ा!"
+[2025-12-28T23:25:08.631Z] Starting STT conversion for language: hindi
+[2025-12-28T23:25:08.632Z] Audio data size: 43766 bytes
+[2025-12-28T23:25:08.633Z] Writing audio to temp file: C:\Users\pmkma\AppData\Local\Temp\input_audio_1766964308633.webm
+[2025-12-28T23:25:08.635Z] [STT] Normalization/Conversion: C:\Users\pmkma\AppData\Local\Temp\input_audio_1766964308633.webm -> C:\Users\pmkma\AppData\Local\Temp\input_audio_1766964308633.wav
+[2025-12-28T23:25:08.706Z] [STT] WAV conversion ready: C:\Users\pmkma\AppData\Local\Temp\input_audio_1766964308633.wav (86478 bytes)
+[2025-12-28T23:25:08.707Z] [STT] Prioritizing RAW WebM for Google STT: C:\Users\pmkma\AppData\Local\Temp\input_audio_1766964308633.webm
+[2025-12-28T23:25:08.708Z] [STT] Credentials Path: ./google-tts-credentials.json
+[2025-12-28T23:25:08.708Z] [STT] Credentials File Exists: true
+[2025-12-28T23:25:08.709Z] [STT] Attempting Google STT with file: C:\Users\pmkma\AppData\Local\Temp\input_audio_1766964308633.webm
+[2025-12-28T23:25:08.710Z] [STT] Final file size for Google: 43766 bytes
+[2025-12-28T23:25:10.134Z] [STT] ✅ Google STT succeeded: "टेल मी अबाउट पिज़्ज़ा!"
+[2025-12-28T23:26:22.308Z] Starting STT conversion for language: telugu
+[2025-12-28T23:26:22.309Z] Audio data size: 60188 bytes
+[2025-12-28T23:26:22.310Z] Writing audio to temp file: C:\Users\pmkma\AppData\Local\Temp\input_audio_1766964382310.webm
+[2025-12-28T23:26:22.311Z] [STT] Normalization/Conversion: C:\Users\pmkma\AppData\Local\Temp\input_audio_1766964382310.webm -> C:\Users\pmkma\AppData\Local\Temp\input_audio_1766964382310.wav
+[2025-12-28T23:26:22.378Z] [STT] WAV conversion ready: C:\Users\pmkma\AppData\Local\Temp\input_audio_1766964382310.wav (119118 bytes)
+[2025-12-28T23:26:22.379Z] [STT] Prioritizing RAW WebM for Google STT: C:\Users\pmkma\AppData\Local\Temp\input_audio_1766964382310.webm
+[2025-12-28T23:26:22.379Z] [STT] Credentials Path: ./google-tts-credentials.json
+[2025-12-28T23:26:22.380Z] [STT] Credentials File Exists: true
+[2025-12-28T23:26:22.381Z] [STT] Attempting Google STT with file: C:\Users\pmkma\AppData\Local\Temp\input_audio_1766964382310.webm
+[2025-12-28T23:26:22.381Z] [STT] Final file size for Google: 60188 bytes
+[2025-12-28T23:26:23.903Z] [STT] ✅ Google STT succeeded: "నాకు పిజ్జా గురించి చెప్పు"
