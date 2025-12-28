@@ -14,15 +14,15 @@ import dotenv from "dotenv";
 let pdfParseFunction = null;
 const getPdfParse = async () => {
   if (pdfParseFunction) return pdfParseFunction;
-  
+
   // Ensure test directory and file exist before import
   const testDir = join(process.cwd(), 'test', 'data');
   const testFile = join(testDir, '05-versions-space.pdf');
-  
+
   if (!fs.existsSync(testDir)) {
     fs.mkdirSync(testDir, { recursive: true });
   }
-  
+
   // Create a minimal valid PDF file if it doesn't exist
   if (!fs.existsSync(testFile)) {
     // Minimal PDF header (PDF-1.4)
@@ -40,7 +40,7 @@ const getPdfParse = async () => {
     fs.writeFileSync(testFile, minimalPdf);
     console.log(`Created minimal PDF test file: ${testFile}`);
   }
-  
+
   try {
     const pdfParseModule = await import('pdf-parse');
     pdfParseFunction = pdfParseModule.default || pdfParseModule;
@@ -125,22 +125,22 @@ app.get("/voices", async (req, res) => {
 app.post("/tts", async (req, res) => {
   const question = req.body.message;
   const language = req.body.language || "english"; // Default to english
-  
+
   console.log("Received TTS request:", question);
   console.log("Language:", language);
-  
+
   try {
     // Cache disabled - always generate fresh responses
     // Check cache first (include language in cache key)
     const cacheKey = `${language}:${question.toLowerCase().trim()}`;
     const cachedResponse = responseCache.get(cacheKey);
-    
+
     if (CACHE_TTL > 0 && cachedResponse && Date.now() - cachedResponse.timestamp < CACHE_TTL) {
       console.log("Returning cached response for TTS:", cacheKey);
       res.send(cachedResponse.data);
       return;
     }
-    
+
     // Generate response with language parameter
     console.log("=== TTS Request ===");
     console.log("Question:", question);
@@ -148,22 +148,64 @@ app.post("/tts", async (req, res) => {
     console.log("Cache disabled - generating fresh response");
     const geminiResponse = await generateAvatarResponse(question, language);
     console.log("Gemini response received:", JSON.stringify(geminiResponse, null, 2));
-    
+
+    // CRITICAL: Validate and clean message text before lip sync
+    if (geminiResponse.messages && Array.isArray(geminiResponse.messages)) {
+      geminiResponse.messages.forEach((message, index) => {
+        console.log(`[Server] Validating message ${index} text...`);
+        console.log(`[Server] Raw message text: "${message.text}"`);
+
+        let cleanText = message.text;
+
+        // If text contains JSON structure, extract the actual text
+        if (cleanText.includes('```json') || cleanText.includes('"messages"')) {
+          console.log(`[Server] ⚠️ Message text contains JSON structure, extracting...`);
+
+          // Remove markdown code fences
+          cleanText = cleanText.replace(/```json\s*/g, '').replace(/```\s*/g, '');
+          cleanText = cleanText.trim();
+
+          // Try to parse as JSON and extract text
+          try {
+            const parsed = JSON.parse(cleanText);
+            if (parsed.messages && Array.isArray(parsed.messages) && parsed.messages[0] && parsed.messages[0].text) {
+              cleanText = parsed.messages[0].text;
+              console.log(`[Server] ✅ Extracted text from JSON: "${cleanText}"`);
+            }
+          } catch (e) {
+            console.warn(`[Server] Could not parse as JSON, using regex extraction...`);
+            // Use regex to extract text field
+            const textMatch = cleanText.match(/"text"\s*:\s*"([^"]+)"/);
+            if (textMatch && textMatch[1]) {
+              cleanText = textMatch[1];
+              // Unescape the text
+              cleanText = cleanText.replace(/\\n/g, ' ').replace(/\\"/g, '"').replace(/\\'/g, "'");
+              console.log(`[Server] ✅ Extracted text via regex: "${cleanText}"`);
+            }
+          }
+        }
+
+        // Update the message text
+        message.text = cleanText;
+        console.log(`[Server] Final message text: "${message.text}"`);
+      });
+    }
+
     // Apply lip sync to all messages with language parameter
     const syncedResponse = await lipSync(geminiResponse, language);
-    
+
     // Cache the response
     responseCache.set(cacheKey, {
       data: syncedResponse,
       timestamp: Date.now()
     });
-    
+
     res.send(syncedResponse);
   } catch (error) {
     console.error("Error generating avatar response:", error);
     console.error("Error message:", error.message);
     console.error("Error stack:", error.stack);
-    
+
     // If it's a quota error, try to return a more helpful message
     if (error.status === 429 || error.message?.includes('quota') || error.message?.includes('429')) {
       const quotaMessages = [
@@ -178,7 +220,7 @@ app.post("/tts", async (req, res) => {
       // Return error in a format the frontend can handle
       const errorMessage = error.message || "Failed to generate avatar response";
       console.error("Sending error response to frontend:", errorMessage);
-      res.status(500).send({ 
+      res.status(500).send({
         error: errorMessage,
         errorMessage: errorMessage,
         messages: [{
@@ -195,7 +237,18 @@ app.post("/sts", async (req, res) => {
   const base64Audio = req.body.audio;
   const language = req.body.language || "english"; // Get language from request
   const audioData = Buffer.from(base64Audio, "base64");
-  
+
+  // DEBUG: Save audio to debug folder
+  try {
+    const debugDir = "debug_audio";
+    if (!fs.existsSync(debugDir)) fs.mkdirSync(debugDir);
+    const debugFilePath = `${debugDir}/sts_audio_${Date.now()}_${language.replace(/[^a-z0-9]/gi, '_')}.webm`;
+    fs.writeFileSync(debugFilePath, audioData);
+    console.log(`[STS] 📁 Saved debug audio: ${debugFilePath}`);
+  } catch (debugError) {
+    console.warn(`[STS] ⚠️ Failed to save debug audio: ${debugError.message}`);
+  }
+
   try {
     console.log("=== STS Request Received ===");
     console.log("Audio data size:", audioData.length, "bytes");
@@ -204,10 +257,10 @@ app.post("/sts", async (req, res) => {
     console.log("   1. Speech-to-Text transcription (STT)");
     console.log("   2. Gemini response generation");
     console.log("   3. Text-to-Speech synthesis (TTS)");
-    
+
     if (!base64Audio || audioData.length === 0) {
       console.error("No audio data received");
-      return res.status(400).send({ 
+      return res.status(400).send({
         error: "No audio data provided",
         messages: [{
           text: "No audio was received. Please try recording again.",
@@ -217,7 +270,7 @@ app.post("/sts", async (req, res) => {
         userMessage: ""
       });
     }
-    
+
     // Convert audio to text using STT module with language parameter
     console.log("=== Converting audio to text ===");
     console.log("Language parameter for STT:", language);
@@ -230,39 +283,18 @@ app.post("/sts", async (req, res) => {
       console.error("STT error stack:", sttError.stack);
       userMessage = "";
     }
-    
+
     console.log("=== STT Transcription Result ===");
-    console.log("Transcribed user message:", userMessage);
+    console.log("Transcribed user message:", userMessage ? `"${userMessage}"` : "EMPTY STRING");
     console.log("Message length:", userMessage ? userMessage.length : 0);
-    console.log("Message preview:", userMessage ? userMessage.substring(0, 100) : "empty");
-    
-    // Validate transcription language matches selected language
-    const lang = language.toLowerCase();
-    if (userMessage && userMessage.trim() !== "") {
-      if (lang === "telugu" || lang === "te") {
-        const teluguScriptRegex = /[\u0C00-\u0C7F]/;
-        const hasTelugu = teluguScriptRegex.test(userMessage);
-        console.log(`[STS] Transcription contains Telugu script: ${hasTelugu ? '✅ YES' : '❌ NO'}`);
-        if (!hasTelugu) {
-          console.warn(`[STS] ⚠️ WARNING: User selected Telugu but transcription appears to be in English or another language`);
-          console.warn(`[STS] Transcription: "${userMessage}"`);
-          console.warn(`[STS] Will still force Gemini to respond in Telugu`);
-        }
-      } else if (lang === "hindi" || lang === "hi") {
-        const hindiScriptRegex = /[\u0900-\u097F]/;
-        const hasHindi = hindiScriptRegex.test(userMessage);
-        console.log(`[STS] Transcription contains Hindi script: ${hasHindi ? '✅ YES' : '❌ NO'}`);
-        if (!hasHindi) {
-          console.warn(`[STS] ⚠️ WARNING: User selected Hindi but transcription appears to be in English or another language`);
-          console.warn(`[STS] Transcription: "${userMessage}"`);
-          console.warn(`[STS] Will still force Gemini to respond in Hindi`);
-        }
-      }
-    }
-    
+
     // If transcription failed or returned empty, use a fallback
     if (!userMessage || userMessage.trim() === "" || userMessage.includes("Sorry, I couldn't understand") || userMessage.includes("Hello, this is a test")) {
-      console.warn("STT failed or returned empty/invalid, using fallback");
+      console.warn("[STS] ⚠️ STT failed or returned empty/invalid. Possible reasons:");
+      console.warn("      1. Microphone didn't pick up audio");
+      console.warn("      2. FFmpeg is not installed (prevents audio normalization)");
+      console.warn("      3. Google STT API couldn't parse the WebM format from your browser");
+
       const fallbackMessages = [
         {
           text: "I'm sorry, I couldn't understand your message. Could you please try speaking again or type your question?",
@@ -270,22 +302,22 @@ app.post("/sts", async (req, res) => {
           animation: "SadIdle"
         }
       ];
-      console.log("Sending fallback response");
+      console.log("[STS] Sending fallback response to frontend");
       res.send({ messages: fallbackMessages, userMessage: userMessage || "" });
       return;
     }
-    
+
     // Cache disabled - always generate fresh responses
     // Check cache first (include language in cache key)
     const cacheKey = `${language}:${userMessage.toLowerCase().trim()}`;
     const cachedResponse = responseCache.get(cacheKey);
-    
+
     if (CACHE_TTL > 0 && cachedResponse && Date.now() - cachedResponse.timestamp < CACHE_TTL) {
       console.log("Returning cached response for STS:", cacheKey);
       res.send({ ...cachedResponse.data, userMessage: userMessage });
       return;
     }
-    
+
     // Generate new response if not cached
     console.log("=== Calling Gemini API ===");
     console.log("Question (transcribed):", userMessage);
@@ -293,16 +325,16 @@ app.post("/sts", async (req, res) => {
     console.log("Language type:", typeof language);
     console.log("⚠️ CRITICAL: Gemini MUST respond in", language.toUpperCase());
     console.log("⚠️ CRITICAL: Language value being sent:", JSON.stringify(language));
-    
+
     const geminiResponse = await generateAvatarResponse(userMessage, language);
-    
+
     console.log("=== Gemini Response Received ===");
     console.log("Response messages count:", geminiResponse.messages ? geminiResponse.messages.length : 0);
     if (geminiResponse.messages && geminiResponse.messages.length > 0) {
       const firstMessageText = geminiResponse.messages[0].text || "";
       console.log("First message text:", firstMessageText.substring(0, 200));
       console.log("Full first message:", JSON.stringify(geminiResponse.messages[0], null, 2));
-      
+
       // Validate response language matches requested language
       const lang = language.toLowerCase();
       if (lang === "telugu" || lang === "te") {
@@ -327,10 +359,10 @@ app.post("/sts", async (req, res) => {
         }
       }
     }
-    
+
     if (!geminiResponse || !geminiResponse.messages || geminiResponse.messages.length === 0) {
       console.error("Gemini returned empty or invalid response");
-      res.status(500).send({ 
+      res.status(500).send({
         error: "Failed to generate response",
         messages: [{
           text: "I'm sorry, I couldn't generate a response. Please try again.",
@@ -340,21 +372,21 @@ app.post("/sts", async (req, res) => {
       });
       return;
     }
-    
+
     // Apply lip sync with language parameter
     console.log("Applying lip sync with language:", language);
     const syncedResponse = await lipSync(geminiResponse, language);
     console.log("Lip sync completed");
-    
+
     // Cache the response
     responseCache.set(cacheKey, {
       data: syncedResponse,
       timestamp: Date.now()
     });
-    
+
     // Include the transcribed user message in the response for chat history
     syncedResponse.userMessage = userMessage;
-    
+
     console.log("=== Sending Response ===");
     console.log("Response messages count:", syncedResponse.messages ? syncedResponse.messages.length : 0);
     res.send(syncedResponse);
@@ -363,7 +395,7 @@ app.post("/sts", async (req, res) => {
     console.error("Error type:", error.constructor.name);
     console.error("Error message:", error.message);
     console.error("Error stack:", error.stack);
-    
+
     // If it's a quota error, try to return a more helpful message
     if (error.status === 429 || error.message?.includes("429") || error.message?.includes("quota")) {
       console.log("Quota error detected");
@@ -382,7 +414,7 @@ app.post("/sts", async (req, res) => {
       res.send({ messages: quotaMessages });
     } else {
       console.error("Sending error response to client");
-      res.status(500).send({ 
+      res.status(500).send({
         error: "Failed to generate avatar response",
         errorMessage: error.message,
         messages: [{
@@ -398,7 +430,7 @@ app.post("/sts", async (req, res) => {
 // Document upload and processing endpoint
 app.post("/api/documents/upload", upload.single('file'), async (req, res) => {
   let filePath = null;
-  
+
   try {
     if (!req.file) {
       console.error("No file in request");
@@ -425,7 +457,7 @@ app.post("/api/documents/upload", upload.single('file'), async (req, res) => {
 
     // Read file content based on type
     let documentText = "";
-    
+
     if (fileExt === '.txt') {
       console.log("Processing TXT file...");
       documentText = fs.readFileSync(filePath, 'utf8');
@@ -437,15 +469,15 @@ app.post("/api/documents/upload", upload.single('file'), async (req, res) => {
         console.log("Reading PDF file buffer from:", filePath);
         const pdfBuffer = fs.readFileSync(filePath);
         console.log(`PDF buffer size: ${pdfBuffer.length} bytes`);
-        
+
         if (pdfBuffer.length === 0) {
           throw new Error("PDF file is empty or could not be read");
         }
-        
+
         // Get pdf-parse function (lazy import)
         console.log("Getting pdf-parse function...");
         const pdfParse = await getPdfParse();
-        
+
         console.log("Parsing PDF buffer...");
         const pdfData = await pdfParse(pdfBuffer);
         documentText = pdfData.text || "";
@@ -463,7 +495,7 @@ app.post("/api/documents/upload", upload.single('file'), async (req, res) => {
         if (!fs.existsSync(filePath)) {
           throw new Error(`File not found: ${filePath}`);
         }
-        
+
         const mammoth = await import('mammoth');
         console.log("Extracting text from DOCX using path:", filePath);
         const result = await mammoth.extractRawText({ path: filePath });
@@ -480,7 +512,7 @@ app.post("/api/documents/upload", upload.single('file'), async (req, res) => {
     } else {
       throw new Error(`Unsupported file type: ${fileExt}`);
     }
-    
+
     if (!documentText || documentText.trim() === '') {
       throw new Error('Could not extract text from the document. The file may be empty or corrupted.');
     }
@@ -492,7 +524,7 @@ app.post("/api/documents/upload", upload.single('file'), async (req, res) => {
     const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
 
     // Limit document text to avoid token limits (keep first 50000 characters)
-    const truncatedText = documentText.length > 50000 
+    const truncatedText = documentText.length > 50000
       ? documentText.substring(0, 50000) + "\n\n[Document truncated due to length...]"
       : documentText;
 
@@ -548,14 +580,14 @@ Please provide a clear, well-structured summary in 2-4 paragraphs.`;
     // Handle multer errors specifically
     if (error instanceof multer.MulterError) {
       if (error.code === 'LIMIT_FILE_SIZE') {
-        return res.status(400).send({ 
+        return res.status(400).send({
           error: "File too large",
           errorMessage: "Maximum file size is 10MB. Please upload a smaller file."
         });
       }
-      return res.status(400).send({ 
+      return res.status(400).send({
         error: "Upload error",
-        errorMessage: error.message 
+        errorMessage: error.message
       });
     }
 
@@ -589,20 +621,20 @@ Please provide a clear, well-structured summary in 2-4 paragraphs.`;
 app.use((error, req, res, next) => {
   if (error instanceof multer.MulterError) {
     if (error.code === 'LIMIT_FILE_SIZE') {
-      return res.status(400).send({ 
+      return res.status(400).send({
         error: "File too large",
         errorMessage: "Maximum file size is 10MB. Please upload a smaller file."
       });
     }
-    return res.status(400).send({ 
+    return res.status(400).send({
       error: "Upload error",
-      errorMessage: error.message 
+      errorMessage: error.message
     });
   }
   if (error) {
-    return res.status(400).send({ 
+    return res.status(400).send({
       error: "Upload error",
-      errorMessage: error.message 
+      errorMessage: error.message
     });
   }
   next();
@@ -612,32 +644,32 @@ app.use((error, req, res, next) => {
 app.post("/summary", async (req, res) => {
   try {
     const { chatHistory } = req.body;
-    
+
     console.log("=== Summary Request Received ===");
     console.log("Chat history length:", chatHistory ? chatHistory.length : 0);
-    
+
     if (!chatHistory || !Array.isArray(chatHistory)) {
       return res.status(400).send({ error: "Invalid chat history provided" });
     }
-    
+
     if (chatHistory.length === 0) {
       return res.send({ summary: "The conversation is empty." });
     }
-    
+
     console.log("Received summary request with", chatHistory.length, "messages");
-    
+
     // Generate summary using Gemini
     console.log("Generating summary...");
     const summary = await generateChatSummary(chatHistory);
-    
+
     console.log("Summary generated successfully");
     res.send({ summary });
   } catch (error) {
     console.error("=== ERROR in Summary endpoint ===");
     console.error("Error:", error.message);
-    res.status(500).send({ 
+    res.status(500).send({
       error: "Failed to generate summary",
-      errorMessage: error.message 
+      errorMessage: error.message
     });
   }
 });
@@ -646,20 +678,20 @@ app.post("/summary", async (req, res) => {
 app.post("/retention-test/generate", async (req, res) => {
   try {
     const { chatHistory } = req.body;
-    
+
     if (!chatHistory || !Array.isArray(chatHistory)) {
       return res.status(400).send({ error: "Invalid chat history provided" });
     }
-    
+
     if (chatHistory.length === 0) {
       return res.status(400).send({ error: "Chat history is empty. Please have a conversation first." });
     }
-    
+
     console.log("Received retention test request with", chatHistory.length, "messages");
-    
+
     // Generate retention test using Gemini
     const test = await generateRetentionTest(chatHistory);
-    
+
     res.send(test);
   } catch (error) {
     console.error("Error generating retention test:", error);
@@ -671,16 +703,16 @@ app.post("/retention-test/generate", async (req, res) => {
 app.post("/retention-test/feedback", async (req, res) => {
   try {
     const { testResults, chatHistory } = req.body;
-    
+
     if (!testResults || !chatHistory) {
       return res.status(400).send({ error: "Test results and chat history are required" });
     }
-    
+
     console.log("Received feedback request for test results");
-    
+
     // Generate personalized feedback using Gemini
     const feedback = await generatePersonalizedFeedback(testResults, chatHistory);
-    
+
     res.send({ feedback });
   } catch (error) {
     console.error("Error generating personalized feedback:", error);

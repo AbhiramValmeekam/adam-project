@@ -1,0 +1,51 @@
+[2025-12-28T22:36:40.151Z] Starting STT conversion for language: english
+[2025-12-28T22:36:40.152Z] Audio data size: 383798 bytes
+[2025-12-28T22:36:40.157Z] Writing audio to temp file: C:\Users\pmkma\AppData\Local\Temp\input_audio_1766961400156.webm
+[2025-12-28T22:36:40.164Z] [STT] Normalization/Conversion: C:\Users\pmkma\AppData\Local\Temp\input_audio_1766961400156.webm -> C:\Users\pmkma\AppData\Local\Temp\input_audio_1766961400156.wav
+[2025-12-28T22:36:40.303Z] [STT] WAV conversion ready: C:\Users\pmkma\AppData\Local\Temp\input_audio_1766961400156.wav (762318 bytes)
+[2025-12-28T22:36:40.304Z] [STT] Prioritizing RAW WebM for Google STT: C:\Users\pmkma\AppData\Local\Temp\input_audio_1766961400156.webm
+[2025-12-28T22:36:40.306Z] [STT] Credentials Path: ./google-tts-credentials.json
+[2025-12-28T22:36:40.309Z] [STT] Credentials File Exists: true
+[2025-12-28T22:36:40.311Z] [STT] Attempting Google STT with file: C:\Users\pmkma\AppData\Local\Temp\input_audio_1766961400156.webm
+[2025-12-28T22:36:40.314Z] [STT] Final file size for Google: 383798 bytes
+[2025-12-28T22:36:41.860Z] [STT] ❌ Google STT failed: Google STT API error: 403 - {"error":{"code":403,"message":"Cloud Speech-to-Text API has not been used in project 156412563716 before or it is disabled. Enable it by visiting https://console.developers.google.com/apis/api/speech.googleapis.com/overview?project=156412563716 then retry. If you enabled this API recently, wait a few minutes for the action to propagate to our systems and retry.","status":"PERMISSION_DENIED","details":[{"@type":"type.googleapis.com/google.rpc.ErrorInfo","reason":"SERVICE_DISABLED","domain":"googleapis.com","metadata":{"activationUrl":"https://console.developers.google.com/apis/api/speech.googleapis.com/overview?project=156412563716","consumer":"projects/156412563716","service":"speech.googleapis.com","containerInfo":"156412563716","serviceTitle":"Cloud Speech-to-Text API"}},{"@type":"type.googleapis.com/google.rpc.LocalizedMessage","locale":"en-US","message":"Cloud Speech-to-Text API has not been used in project 156412563716 before or it is disabled. Enable it by visiting https://console.developers.google.com/apis/api/speech.googleapis.com/overview?project=156412563716 then retry. If you enabled this API recently, wait a few minutes for the action to propagate to our systems and retry."},{"@type":"type.googleapis.com/google.rpc.Help","links":[{"description":"Google developers console API activation","url":"https://console.developers.google.com/apis/api/speech.googleapis.com/overview?project=156412563716"}]}]}}
+[2025-12-28T22:36:41.910Z] [STT] Local Whisper failed: Command failed: whisper --help
+'whisper' is not recognized as an internal or external command,
+operable program or batch file.
+
+[2025-12-28T22:36:41.916Z] All STT methods failed, returning empty transcription
+[2025-12-28T23:02:07.537Z] Starting STT conversion for language: english
+[2025-12-28T23:02:07.538Z] Audio data size: 409880 bytes
+[2025-12-28T23:02:07.540Z] Writing audio to temp file: C:\Users\pmkma\AppData\Local\Temp\input_audio_1766962927539.webm
+[2025-12-28T23:02:07.542Z] [STT] Normalization/Conversion: C:\Users\pmkma\AppData\Local\Temp\input_audio_1766962927539.webm -> C:\Users\pmkma\AppData\Local\Temp\input_audio_1766962927539.wav
+[2025-12-28T23:02:07.726Z] [STT] WAV conversion ready: C:\Users\pmkma\AppData\Local\Temp\input_audio_1766962927539.wav (814158 bytes)
+[2025-12-28T23:02:07.728Z] [STT] Prioritizing RAW WebM for Google STT: C:\Users\pmkma\AppData\Local\Temp\input_audio_1766962927539.webm
+[2025-12-28T23:02:07.734Z] [STT] Credentials Path: ./google-tts-credentials.json
+[2025-12-28T23:02:07.738Z] [STT] Credentials File Exists: true
+[2025-12-28T23:02:07.742Z] [STT] Attempting Google STT with file: C:\Users\pmkma\AppData\Local\Temp\input_audio_1766962927539.webm
+[2025-12-28T23:02:07.747Z] [STT] Final file size for Google: 409880 bytes
+[2025-12-28T23:02:12.310Z] [STT] ✅ Google STT succeeded: "
+
+Hello."
+[2025-12-28T23:02:29.708Z] Starting STT conversion for language: english
+[2025-12-28T23:02:29.709Z] Audio data size: 37970 bytes
+[2025-12-28T23:02:29.710Z] Writing audio to temp file: C:\Users\pmkma\AppData\Local\Temp\input_audio_1766962949710.webm
+[2025-12-28T23:02:29.712Z] [STT] Normalization/Conversion: C:\Users\pmkma\AppData\Local\Temp\input_audio_1766962949710.webm -> C:\Users\pmkma\AppData\Local\Temp\input_audio_1766962949710.wav
+[2025-12-28T23:02:29.821Z] [STT] WAV conversion ready: C:\Users\pmkma\AppData\Local\Temp\input_audio_1766962949710.wav (74958 bytes)
+[2025-12-28T23:02:29.822Z] [STT] Prioritizing RAW WebM for Google STT: C:\Users\pmkma\AppData\Local\Temp\input_audio_1766962949710.webm
+[2025-12-28T23:02:29.823Z] [STT] Credentials Path: ./google-tts-credentials.json
+[2025-12-28T23:02:29.826Z] [STT] Credentials File Exists: true
+[2025-12-28T23:02:29.827Z] [STT] Attempting Google STT with file: C:\Users\pmkma\AppData\Local\Temp\input_audio_1766962949710.webm
+[2025-12-28T23:02:29.829Z] [STT] Final file size for Google: 37970 bytes
+[2025-12-28T23:02:31.013Z] [STT] ✅ Google STT succeeded: "Tell me about pizza."
+[2025-12-28T23:03:04.700Z] Starting STT conversion for language: hindi
+[2025-12-28T23:03:04.700Z] Audio data size: 39902 bytes
+[2025-12-28T23:03:04.701Z] Writing audio to temp file: C:\Users\pmkma\AppData\Local\Temp\input_audio_1766962984701.webm
+[2025-12-28T23:03:04.703Z] [STT] Normalization/Conversion: C:\Users\pmkma\AppData\Local\Temp\input_audio_1766962984701.webm -> C:\Users\pmkma\AppData\Local\Temp\input_audio_1766962984701.wav
+[2025-12-28T23:03:04.783Z] [STT] WAV conversion ready: C:\Users\pmkma\AppData\Local\Temp\input_audio_1766962984701.wav (78798 bytes)
+[2025-12-28T23:03:04.784Z] [STT] Prioritizing RAW WebM for Google STT: C:\Users\pmkma\AppData\Local\Temp\input_audio_1766962984701.webm
+[2025-12-28T23:03:04.784Z] [STT] Credentials Path: ./google-tts-credentials.json
+[2025-12-28T23:03:04.785Z] [STT] Credentials File Exists: true
+[2025-12-28T23:03:04.786Z] [STT] Attempting Google STT with file: C:\Users\pmkma\AppData\Local\Temp\input_audio_1766962984701.webm
+[2025-12-28T23:03:04.788Z] [STT] Final file size for Google: 39902 bytes
+[2025-12-28T23:03:06.003Z] [STT] ✅ Google STT succeeded: "टेल मी अबाउट बर्गर!"

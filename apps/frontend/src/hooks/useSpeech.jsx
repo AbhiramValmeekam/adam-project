@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState } from "react";
+import { createContext, useContext, useEffect, useState, useRef } from "react";
 
 const backendUrl = "http://localhost:3002"; // Changed from 3001 to 3002
 
@@ -15,16 +15,26 @@ export const SpeechProvider = ({ children }) => {
   const [currentAudio, setCurrentAudio] = useState(null); // Track current audio for stopping
   const [currentImages, setCurrentImages] = useState([]); // Track current images
   const [lastUserMessage, setLastUserMessage] = useState(""); // Track last user message from voice recording
-  const [selectedLanguage, setSelectedLanguage] = useState("english"); // Language selection: english, hindi, telugu
+  const [selectedLanguage, setSelectedLanguage] = useState("english");
+  const selectedLanguageRef = useRef("english");
 
-  let chunks = [];
+  // Keep ref in sync with state
+  useEffect(() => {
+    selectedLanguageRef.current = selectedLanguage;
+  }, [selectedLanguage]);
+
+  const chunksRef = useRef([]);
 
   const initiateRecording = () => {
-    chunks = [];
+    chunksRef.current = [];
+    console.log("Recording initiated, chunks cleared");
   };
 
   const onDataAvailable = (e) => {
-    chunks.push(e.data);
+    if (e.data && e.data.size > 0) {
+      chunksRef.current.push(e.data);
+      console.log(`Chunk received: ${e.data.size} bytes. Total chunks: ${chunksRef.current.length}`);
+    }
   };
 
   const sendAudioData = async (audioBlob) => {
@@ -34,11 +44,9 @@ export const SpeechProvider = ({ children }) => {
       const base64Audio = reader.result.split(",")[1];
       setLoading(true);
       console.log("=== Frontend: Sending audio to STS endpoint ===");
-      console.log("Selected language:", selectedLanguage);
-      console.log("Language type:", typeof selectedLanguage);
-      console.log("⚠️ CRITICAL: This language will be used for STT, Gemini, and TTS");
+      console.log("Selected language (from ref):", selectedLanguageRef.current);
       try {
-        const requestBody = { audio: base64Audio, language: selectedLanguage };
+        const requestBody = { audio: base64Audio, language: selectedLanguageRef.current };
         console.log("Request body (language field):", requestBody.language);
         const data = await fetch(`${backendUrl}/sts`, {
           method: "POST",
@@ -47,25 +55,25 @@ export const SpeechProvider = ({ children }) => {
           },
           body: JSON.stringify(requestBody),
         });
-        
+
         console.log("Response status:", data.status);
-        
+
         if (!data.ok) {
           const errorText = await data.text();
           console.error("Error response from server:", errorText);
           throw new Error(`Server error: ${data.status} - ${errorText}`);
         }
-        
+
         const response = await data.json();
         console.log("=== Frontend: Received response ===");
         console.log("Full response:", response);
-        
+
         // Store the transcribed user message if available
         if (response.userMessage) {
           console.log("Transcribed user message:", response.userMessage);
           setLastUserMessage(response.userMessage);
         }
-        
+
         // Handle messages - simplified to handle both array and object formats
         let responseMessages = [];
         if (Array.isArray(response)) {
@@ -81,10 +89,10 @@ export const SpeechProvider = ({ children }) => {
             animation: "SadIdle"
           }];
         }
-        
+
         console.log("Extracted messages:", responseMessages);
         console.log("Messages count:", responseMessages.length);
-        
+
         // Handle images
         if (response.images && Array.isArray(response.images)) {
           console.log("Setting current images (STS):", response.images);
@@ -92,11 +100,11 @@ export const SpeechProvider = ({ children }) => {
         } else {
           console.log("No images in STS response");
         }
-        
+
         // Note: User message from voice recording should be added to chat history
         // This is handled by the ChatInterface component when it receives the transcribed text
         // For now, we'll just add the AI response messages
-        
+
         if (responseMessages.length > 0) {
           console.log("Adding messages to queue:", responseMessages);
           setMessages((messages) => [...messages, ...responseMessages]);
@@ -131,21 +139,39 @@ export const SpeechProvider = ({ children }) => {
       navigator.mediaDevices
         .getUserMedia({ audio: true })
         .then((stream) => {
-          const newMediaRecorder = new MediaRecorder(stream);
+          // Detect supported codecs
+          const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
+            ? 'audio/webm;codecs=opus'
+            : 'audio/webm';
+
+          console.log(`Using MIME type for recording: ${mimeType}`);
+
+          const newMediaRecorder = new MediaRecorder(stream, { mimeType });
           newMediaRecorder.onstart = initiateRecording;
           newMediaRecorder.ondataavailable = onDataAvailable;
           newMediaRecorder.onstop = async () => {
-            const audioBlob = new Blob(chunks, { type: "audio/webm" });
+            console.log(`Recording stopped. Total chunks to process: ${chunksRef.current.length}`);
+            const audioBlob = new Blob(chunksRef.current, { type: mimeType });
+            console.log(`Final audio blob size: ${audioBlob.size} bytes`);
+            console.log(`Sending audio for language: ${selectedLanguageRef.current}`);
+
+            if (audioBlob.size === 0) {
+              console.error("Recorded audio blob is empty!");
+              return;
+            }
+
             try {
               await sendAudioData(audioBlob);
             } catch (error) {
-              console.error(error);
-              alert(error.message);
+              console.error("Failed to send audio data:", error);
             }
           };
           setMediaRecorder(newMediaRecorder);
         })
-        .catch((err) => console.error("Error accessing microphone:", err));
+        .catch((err) => {
+          console.error("Error accessing microphone:", err);
+          // Potential UI notification for blocked microphone
+        });
     }
   }, []);
 
@@ -176,9 +202,9 @@ export const SpeechProvider = ({ children }) => {
         },
         body: JSON.stringify({ message: messageText, language: language || selectedLanguage }),
       });
-      
+
       console.log("Response status:", data.status);
-      
+
       if (!data.ok) {
         const errorText = await data.text();
         console.error("Error response from server:", errorText);
@@ -191,11 +217,11 @@ export const SpeechProvider = ({ children }) => {
         }
         throw new Error(`Server error: ${data.status} - ${errorMessage}`);
       }
-      
+
       const response = await data.json();
       console.log("=== Frontend: Received TTS response ===");
       console.log("Full response:", response);
-      
+
       // Handle messages - simplified to handle both array and object formats
       let responseMessages = [];
       if (Array.isArray(response)) {
@@ -210,7 +236,7 @@ export const SpeechProvider = ({ children }) => {
           animation: "SadIdle"
         }];
       }
-      
+
       // Handle images
       if (response.images && Array.isArray(response.images)) {
         console.log("Setting current images (TTS):", response.images);
@@ -218,7 +244,7 @@ export const SpeechProvider = ({ children }) => {
       } else {
         console.log("No images in TTS response");
       }
-      
+
       if (responseMessages.length > 0) {
         console.log("Adding messages to queue:", responseMessages);
         setMessages((messages) => [...messages, ...responseMessages]);
@@ -286,26 +312,26 @@ export const SpeechProvider = ({ children }) => {
         }
         return;
       }
-      
+
       const currentTime = currentAudio.currentTime || 0;
       const audioDuration = currentAudio.duration;
-      
+
       // Wait for valid duration
       if (!audioDuration || audioDuration === 0 || isNaN(audioDuration)) {
         rafId = requestAnimationFrame(updateCaption);
         return;
       }
-      
+
       // Calculate progress linearly (no easing to match speech exactly)
       const progress = Math.min(Math.max(currentTime / audioDuration, 0), 1);
-      
+
       // Calculate word index directly from progress (linear mapping)
       const wordIndex = Math.floor(progress * words.length);
-      
+
       // Update only when word index changes
       if (wordIndex !== lastWordIndex) {
         lastWordIndex = wordIndex;
-        
+
         if (wordIndex >= words.length) {
           // Show full text when complete
           setDisplayedCaptionText(currentMessageText);
@@ -318,7 +344,7 @@ export const SpeechProvider = ({ children }) => {
           setDisplayedCaptionText("");
         }
       }
-      
+
       // Continue updating while playing
       if (!currentAudio.ended && !currentAudio.paused) {
         rafId = requestAnimationFrame(updateCaption);
@@ -355,7 +381,7 @@ export const SpeechProvider = ({ children }) => {
     currentAudio.addEventListener('play', handlePlay);
     currentAudio.addEventListener('timeupdate', handleTimeUpdate);
     currentAudio.addEventListener('ended', handleEnded);
-    
+
     // Start immediately if audio is already playing or loaded
     if (currentAudio.readyState >= 2) { // HAVE_CURRENT_DATA or higher
       if (currentAudio.paused) {
@@ -390,7 +416,28 @@ export const SpeechProvider = ({ children }) => {
     if (messages.length > 0) {
       console.log("Setting current message:", messages[0]);
       setMessage(messages[0]);
-      setCurrentMessageText(messages[0].text || ""); // Set current message text for captions
+
+      // Extract text and clean it
+      let messageText = messages[0].text || "";
+
+      // If the text itself is a JSON string, parse it
+      if (messageText.includes('"messages"') && messageText.includes('"text"')) {
+        try {
+          // Remove any markdown code fences first
+          let cleanText = messageText.replace(/```json\s*/g, '').replace(/```\s*/g, '');
+          cleanText = cleanText.replace(/^`+|`+$/g, '');
+
+          // Try to parse as JSON
+          const parsed = JSON.parse(cleanText);
+          if (parsed.messages && Array.isArray(parsed.messages) && parsed.messages[0] && parsed.messages[0].text) {
+            messageText = parsed.messages[0].text;
+          }
+        } catch (e) {
+          console.warn("Failed to parse message text as JSON:", e);
+        }
+      }
+
+      setCurrentMessageText(messageText); // Set current message text for captions
       setDisplayedCaptionText(""); // Reset displayed text when new message starts
     } else {
       console.log("No more messages");

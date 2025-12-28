@@ -23,21 +23,21 @@ const exec = promisify(execSync);
 async function convertTextToSpeech({ text, fileName, language = "english" }) {
   // Normalize language
   const lang = language.toLowerCase();
-  
+
   // Route Hindi and Telugu to Google Cloud TTS
   if (lang === "hindi" || lang === "hi" || lang === "telugu" || lang === "te") {
     try {
       console.log(`[TTS] ===== Using Google Cloud TTS for ${language} =====`);
       console.log(`[TTS] Text length: ${text.length} characters`);
       console.log(`[TTS] Text preview: ${text.substring(0, 100)}...`);
-      
+
       // Ensure fileName is MP3 for Google TTS
       const mp3FileName = fileName.endsWith('.mp3') ? fileName : fileName.replace(/\.(wav|aiff)$/, '.mp3');
       console.log(`[TTS] Output file: ${mp3FileName}`);
       console.log(`[TTS] Language code: ${lang}`);
-      
+
       await googleTTS(text, lang, mp3FileName);
-      
+
       // Verify file was created
       if (fs.existsSync(mp3FileName)) {
         const stats = fs.statSync(mp3FileName);
@@ -53,16 +53,16 @@ async function convertTextToSpeech({ text, fileName, language = "english" }) {
       throw new Error(`Failed to generate ${language} TTS: ${error.message}`);
     }
   }
-  
+
   // Use local TTS for English or as fallback
   console.log(`[TTS] Using local TTS for ${language}`);
-  
+
   try {
     console.log(`Converting text to speech: ${text.substring(0, 50)}...`);
-    
+
     // Try different TTS solutions based on the platform
     const platform = process.platform;
-    
+
     if (platform === "darwin") {
       // macOS - use 'say' command
       try {
@@ -99,11 +99,11 @@ async function convertTextToSpeech({ text, fileName, language = "english" }) {
           $synth.Speak("${escapedText}")
           $stream.Close()
         `;
-        
+
         fs.writeFileSync('tts.ps1', psScript);
         execSync('powershell -ExecutionPolicy Bypass -File tts.ps1');
         fs.unlinkSync('tts.ps1');
-        
+
         // On Windows, we create WAV files directly, so no conversion needed
         console.log("Windows TTS completed, created WAV file");
         return;
@@ -131,11 +131,11 @@ async function convertTextToSpeech({ text, fileName, language = "english" }) {
         console.warn("espeak command failed:", error.message);
       }
     }
-    
+
     // Fallback: Create a simple placeholder audio file
     console.warn("All TTS methods failed, creating placeholder audio");
     createPlaceholderAudio(fileName);
-    
+
   } catch (error) {
     console.error("Error in convertTextToSpeech:", error);
     // Create a placeholder audio file as fallback
@@ -151,7 +151,7 @@ function createPlaceholderAudio(fileName) {
     0x10, 0x00, 0x00, 0x00, 0x01, 0x00, 0x01, 0x00, 0x40, 0x1f, 0x00, 0x00, 0x80, 0x3e, 0x00, 0x00,
     0x02, 0x00, 0x10, 0x00, 0x64, 0x61, 0x74, 0x61, 0x00, 0x00, 0x00, 0x00
   ]);
-  
+
   fs.writeFileSync(fileName, silentWav);
 }
 

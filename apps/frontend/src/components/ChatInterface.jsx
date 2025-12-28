@@ -2,6 +2,24 @@ import { useRef, useState, useEffect } from "react";
 import { useSpeech } from "../hooks/useSpeech";
 import { RetentionTest } from "./RetentionTest"; // Import the RetentionTest component
 
+// Helper function to clean caption text
+const cleanCaption = (text) => {
+    if (!text) return "";
+    let clean = text;
+    // Remove markdown code fences
+    clean = clean.replace(/```json\s*/g, '').replace(/```\s*/g, '');
+    // Remove backticks
+    clean = clean.replace(/^`+|`+$/g, '');
+    // If it looks like JSON, extract the text field
+    if (clean.trim().startsWith('{') && clean.includes('"text"')) {
+        try {
+            const parsed = JSON.parse(clean);
+            if (parsed.messages?.[0]?.text) return parsed.messages[0].text;
+        } catch (e) { }
+    }
+    return clean;
+};
+
 export const ChatInterface = ({ hidden, ...props }) => {
   const input = useRef();
   const fileInput = useRef();
@@ -458,7 +476,7 @@ export const ChatInterface = ({ hidden, ...props }) => {
                   fontFamily: 'system-ui, -apple-system, sans-serif'
                 }}
               >
-                {displayedCaptionText || currentMessageText}
+                {cleanCaption(displayedCaptionText || currentMessageText)}
                 {displayedCaptionText && displayedCaptionText.length < currentMessageText.length && (
                   <span className="inline-block w-0.5 h-5 bg-white ml-1 animate-pulse align-middle"></span>
                 )}

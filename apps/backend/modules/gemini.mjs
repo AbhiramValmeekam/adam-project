@@ -83,7 +83,7 @@ function generateAIImage(prompt, seed = null) {
   const encodedPrompt = encodeURIComponent(prompt);
   const seedParam = seed ? `&seed=${seed}` : '';
   const imageUrl = `https://image.pollinations.ai/prompt/${encodedPrompt}?width=400&height=300&nologo=true${seedParam}`;
-  
+
   return {
     url: imageUrl,
     label: prompt,
@@ -101,54 +101,54 @@ async function fetchWikimediaImages(searchQuery, count = 3) {
     const encodedQuery = encodeURIComponent(searchQuery);
     // Added more specific search parameters for better relevance
     const apiUrl = `https://commons.wikimedia.org/w/api.php?action=query&format=json&generator=search&gsrnamespace=6&gsrsearch=${encodedQuery}&gsrlimit=${count * 2}&prop=imageinfo&iiprop=url|extmetadata|canonicaltitle&iiurlwidth=400&gsrinfo=totalhits`;
-    
+
     console.log(`Fetching images from Wikimedia for query: "${searchQuery}"`);
-    
+
     const response = await fetch(apiUrl, {
       headers: {
         'User-Agent': 'DigitalHumanApp/1.0 (Educational AI Avatar - Highly Relevant Image Search)'
       }
     });
-    
+
     if (!response.ok) {
       throw new Error(`Wikimedia API error: ${response.status}`);
     }
-    
+
     const data = await response.json();
-    
+
     if (data.query && data.query.pages) {
       const pages = Object.values(data.query.pages);
       const images = [];
-      
+
       for (const page of pages) {
         if (page.imageinfo && page.imageinfo[0]) {
           const imageInfo = page.imageinfo[0];
-          
+
           // Extract cleaner title without File: prefix
           let cleanTitle = page.title.replace(/^File:/, '');
           if (imageInfo.extmetadata && imageInfo.extmetadata.ObjectName) {
             cleanTitle = imageInfo.extmetadata.ObjectName.value;
           }
-          
+
           // Only include images that seem relevant to our search query
           const lowerCleanTitle = cleanTitle.toLowerCase();
           const lowerSearchQuery = searchQuery.toLowerCase();
-          
+
           // Enhanced relevance checking:
           // 1. Exact match or containment
           const hasExactMatch = lowerCleanTitle.includes(lowerSearchQuery) || lowerSearchQuery.includes(lowerCleanTitle);
-          
+
           // 2. Significant word overlap (at least 50% of search query words found in title)
           const searchWords = searchQuery.split(/\s+/).filter(word => word.length > 2);
-          const matchingWords = searchWords.filter(word => 
+          const matchingWords = searchWords.filter(word =>
             lowerCleanTitle.includes(word.toLowerCase())
           );
           const hasSignificantOverlap = matchingWords.length >= Math.ceil(searchWords.length * 0.5);
-          
+
           // 3. Check for common educational terms that indicate relevance
           const educationalTerms = ['diagram', 'chart', 'graph', 'illustration', 'schema', 'map', 'photo', 'drawing', 'artwork'];
           const hasEducationalTerm = educationalTerms.some(term => lowerCleanTitle.includes(term));
-          
+
           // Include image if it meets any of our relevance criteria
           if (hasExactMatch || hasSignificantOverlap || hasEducationalTerm) {
             images.push({
@@ -161,37 +161,37 @@ async function fetchWikimediaImages(searchQuery, count = 3) {
           }
         }
       }
-      
+
       // Sort images by relevance (exact matches first)
       images.sort((a, b) => {
         const aTitle = a.alt.toLowerCase();
         const bTitle = b.alt.toLowerCase();
         const searchQueryLower = searchQuery.toLowerCase();
-        
+
         // Exact matches first
         const aExact = aTitle === searchQueryLower ? 0 : 1;
         const bExact = bTitle === searchQueryLower ? 0 : 1;
         if (aExact !== bExact) return aExact - bExact;
-        
+
         // Then partial matches with more words matching
         const aWords = searchQuery.split(/\s+/).filter(word => word.length > 2);
         const bWords = searchQuery.split(/\s+/).filter(word => word.length > 2);
-        
+
         const aMatches = aWords.filter(word => aTitle.includes(word.toLowerCase())).length;
         const bMatches = bWords.filter(word => bTitle.includes(word.toLowerCase())).length;
-        
+
         return bMatches - aMatches; // Descending order
       });
-      
+
       // Limit to requested count
       const limitedImages = images.slice(0, count);
-      
+
       if (limitedImages.length > 0) {
         console.log(`Found ${limitedImages.length} exactly relevant Wikimedia images for: "${searchQuery}"`);
         return limitedImages;
       }
     }
-    
+
     // No images found, return placeholder
     console.log(`No relevant Wikimedia images found for: "${searchQuery}"`);
     const timestamp = Date.now();
@@ -217,7 +217,7 @@ async function fetchWikimediaImages(searchQuery, count = 3) {
 // Function to fetch images from Pexels API (fallback)
 async function fetchPexelsImages(searchQuery, count = 2) {
   const apiKey = process.env.PEXELS_API_KEY;
-  
+
   // If no API key, return placeholder images with labels
   if (!apiKey || apiKey === 'YOUR_PEXELS_API_KEY_HERE') {
     console.log('Pexels API key not configured, using placeholder images');
@@ -229,7 +229,7 @@ async function fetchPexelsImages(searchQuery, count = 2) {
       source: 'picsum'
     }));
   }
-  
+
   try {
     const response = await fetch(
       `https://api.pexels.com/v1/search?query=${encodeURIComponent(searchQuery)}&per_page=${count}&orientation=landscape`,
@@ -239,13 +239,13 @@ async function fetchPexelsImages(searchQuery, count = 2) {
         }
       }
     );
-    
+
     if (!response.ok) {
       throw new Error(`Pexels API error: ${response.status}`);
     }
-    
+
     const data = await response.json();
-    
+
     if (data.photos && data.photos.length > 0) {
       return data.photos.map(photo => ({
         url: photo.src.medium, // 350x350 size
@@ -282,7 +282,7 @@ async function fetchPexelsImages(searchQuery, count = 2) {
 async function extractImageSearchTerms(question, responseText = "") {
   try {
     const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
-    
+
     const prompt = `You are an expert at extracting the most relevant search terms for finding images.
 
 Given a user's question and optionally their response, extract 1-3 specific, concrete search terms that would find the MOST RELEVANT images for this topic.
@@ -319,7 +319,7 @@ Extract the most relevant image search terms:`;
     const result = await model.generateContent(prompt);
     const response = await result.response;
     const extractedTerms = response.text().trim();
-    
+
     // Clean up the response - remove any markdown, quotes, or extra text
     let cleanTerms = extractedTerms
       .replace(/^["']|["']$/g, '') // Remove surrounding quotes
@@ -327,18 +327,18 @@ Extract the most relevant image search terms:`;
       .replace(/^`|`$/g, '') // Remove code blocks
       .replace(/^Search terms?:?\s*/i, '') // Remove "Search terms:" prefix
       .trim();
-    
+
     // If multiple terms, take the first one (most relevant)
     if (cleanTerms.includes(',')) {
       cleanTerms = cleanTerms.split(',')[0].trim();
     }
-    
+
     // Limit to 5 words max
     const words = cleanTerms.split(/\s+/);
     if (words.length > 5) {
       cleanTerms = words.slice(0, 5).join(' ');
     }
-    
+
     console.log(`✅ Gemini extracted search terms: "${cleanTerms}"`);
     return cleanTerms;
   } catch (error) {
@@ -350,60 +350,60 @@ Extract the most relevant image search terms:`;
 // Function to clean search terms by removing common words that reduce relevance
 function cleanSearchTerms(terms) {
   if (!terms) return terms;
-  
+
   // Remove common filler words that don't help with image search
-  const fillerWords = ['the', 'a', 'an', 'is', 'are', 'was', 'were', 'be', 'been', 'being', 
-                       'have', 'has', 'had', 'do', 'does', 'did', 'will', 'would', 'could', 
-                       'should', 'may', 'might', 'can', 'about', 'what', 'how', 'why', 'when', 
-                       'where', 'which', 'who', 'this', 'that', 'these', 'those', 'it', 'its'];
-  
+  const fillerWords = ['the', 'a', 'an', 'is', 'are', 'was', 'were', 'be', 'been', 'being',
+    'have', 'has', 'had', 'do', 'does', 'did', 'will', 'would', 'could',
+    'should', 'may', 'might', 'can', 'about', 'what', 'how', 'why', 'when',
+    'where', 'which', 'who', 'this', 'that', 'these', 'those', 'it', 'its'];
+
   const words = terms.split(/\s+/);
   const cleaned = words.filter(word => {
     const lower = word.toLowerCase().replace(/[^a-z]/g, '');
     return !fillerWords.includes(lower) && lower.length > 1;
   });
-  
+
   // If we removed too many words, keep the original
   if (cleaned.length === 0 || cleaned.length < words.length * 0.3) {
     return terms;
   }
-  
+
   return cleaned.join(' ');
 }
 
 // Enhanced function to extract keywords and generate exactly relevant image data with labels
 async function generateImageUrls(question, responseText) {
   console.log(`🔍 Generating relevant images for question: "${question}"`);
-  
+
   // Use Gemini to extract the most relevant search terms for images
   let searchTerms = await extractImageSearchTerms(question, responseText);
-  
+
   // Fallback to core subject extraction if Gemini extraction fails
   if (!searchTerms || searchTerms.length < 3) {
     console.log(`⚠️  Gemini extraction failed or too short, using fallback extraction`);
     searchTerms = extractCoreSubject(question);
   }
-  
+
   // Clean up search terms - remove common words that reduce relevance
   searchTerms = cleanSearchTerms(searchTerms);
-  
+
   console.log(`🎯 Using maximally relevant search terms: "${searchTerms}"`);
-  
+
   // Try multiple image sources in order of preference for exactly relevant images
   try {
     // First, try Wikimedia Commons (most reliable for educational content)
     console.log(`🖼️  Attempting to fetch from Wikimedia Commons...`);
     const wikimediaImages = await fetchWikimediaImages(searchTerms, 3); // Increased to 3 images for better selection
-    
+
     if (wikimediaImages && wikimediaImages.length > 0) {
       // Process Wikimedia images with maximally relevant labels
       const processedImages = wikimediaImages.map((image, index) => {
-        const relevanceLabel = index === 0 
+        const relevanceLabel = index === 0
           ? `🎯 Exact match for: "${searchTerms}"`
           : index === 1
-          ? `📚 Directly related to: "${searchTerms}"`
-          : `📖 Contextually relevant to: "${searchTerms}"`;
-          
+            ? `📚 Directly related to: "${searchTerms}"`
+            : `📖 Contextually relevant to: "${searchTerms}"`;
+
         return {
           url: image.url,
           label: relevanceLabel,
@@ -412,28 +412,28 @@ async function generateImageUrls(question, responseText) {
           alt: `${searchTerms} - ${image.alt || 'educational illustration'}`
         };
       });
-      
+
       console.log(`✅ Successfully found ${processedImages.length} maximally relevant Wikimedia images for: "${searchTerms}"`);
       return processedImages;
     }
   } catch (wikimediaError) {
     console.warn("⚠️  Wikimedia search failed, trying alternative sources:", wikimediaError.message);
   }
-  
+
   // Fallback to Pexels if available
   try {
     console.log(`📸 Attempting to fetch from Pexels...`);
     const pexelsImages = await fetchPexelsImages(searchTerms, 3); // Increased to 3 images for better selection
-    
+
     if (pexelsImages && pexelsImages.length > 0) {
       // Process Pexels images with maximally relevant labels
       const processedImages = pexelsImages.map((image, index) => {
-        const relevanceLabel = index === 0 
+        const relevanceLabel = index === 0
           ? `🎯 Primary visualization of: "${searchTerms}"`
           : index === 1
-          ? `📚 Supporting image for: "${searchTerms}"`
-          : `📖 Illustrative example of: "${searchTerms}"`;
-          
+            ? `📚 Supporting image for: "${searchTerms}"`
+            : `📖 Illustrative example of: "${searchTerms}"`;
+
         return {
           url: image.url,
           label: relevanceLabel,
@@ -442,14 +442,14 @@ async function generateImageUrls(question, responseText) {
           alt: `${searchTerms} - ${image.alt || 'relevant stock photo'}`
         };
       });
-      
+
       console.log(`✅ Successfully found ${processedImages.length} maximally relevant Pexels images for: "${searchTerms}"`);
       return processedImages;
     }
   } catch (pexelsError) {
     console.warn("⚠️  Pexels search failed, falling back to placeholders:", pexelsError.message);
   }
-  
+
   // Final fallback to descriptive placeholders with stronger relevance indicators
   console.log(`📄 Creating maximally descriptive placeholder images for: "${searchTerms}"`);
   const timestamp = Date.now();
@@ -489,9 +489,9 @@ function extractTechnicalTerms(text) {
     // Technical phrases with hyphens (e.g., "machine-learning", "block-chain")
     /\b([a-z]+-[a-z]+(?:-[a-z]+)*)\b/g
   ];
-  
+
   const terms = new Set();
-  
+
   patterns.forEach(pattern => {
     const matches = text.match(pattern);
     if (matches) {
@@ -504,7 +504,7 @@ function extractTechnicalTerms(text) {
       });
     }
   });
-  
+
   // Convert to array and sort by specificity (longer terms first)
   return Array.from(terms)
     .sort((a, b) => b.length - a.length)
@@ -516,20 +516,20 @@ function extractNamedEntities(text) {
   // Pattern for proper nouns (likely names of people, places, organizations)
   const properNounPattern = /\b([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)\b/g;
   const matches = text.match(properNounPattern);
-  
+
   if (!matches) return [];
-  
+
   // Filter for likely entities (more than one word, not common words)
   const entities = matches.filter(entity => {
     const words = entity.split(/\s+/);
     return words.length >= 2 && words.every(word => word.length > 2) && !isCommonWord(entity.toLowerCase());
   });
-  
+
   // Also include single-word proper nouns that are likely names (capitalized and longer than 3 chars)
   const singleWordEntities = matches.filter(entity => {
     return entity.length > 3 && /^[A-Z]/.test(entity) && !isCommonWord(entity.toLowerCase());
   });
-  
+
   // Combine and deduplicate
   const allEntities = [...entities, ...singleWordEntities];
   return [...new Set(allEntities)].slice(0, 3); // Return unique entities, max 3
@@ -540,7 +540,7 @@ function isCommonWord(word) {
   const commonWords = new Set([
     'the', 'and', 'for', 'are', 'but', 'not', 'you', 'all', 'can', 'had', 'her', 'was', 'one', 'our', 'out', 'day', 'get', 'has', 'him', 'his', 'how', 'its', 'may', 'new', 'now', 'old', 'see', 'two', 'who', 'boy', 'did', 'man', 'men', 'put', 'too', 'use', 'any', 'big', 'end', 'far', 'got', 'job', 'law', 'let', 'lot', 'low', 'may', 'nor', 'off', 'old', 'pro', 'run', 'say', 'set', 'she', 'sit', 'six', 'top', 'try', 'up', 'way', 'win', 'yes', 'yet', 'bit', 'eat', 'fix', 'fly', 'hit', 'ill', 'lay', 'led', 'lie', 'log', 'met', 'own', 'pay', 'per', 'pop', 'ran', 'rid', 'sat', 'sun', 'war', 'why', 'wit', 'wet', 'ask', 'buy', 'cut', 'die', 'eat', 'fit', 'get', 'hit', 'lie', 'mix', 'owe', 'put', 'rid', 'run', 'say', 'see', 'set', 'sit', 'tie', 'win', 'yes', 'add', 'age', 'ago', 'aid', 'aim', 'air', 'ale', 'all', 'amp', 'and', 'ant', 'any', 'ape', 'app', 'apt', 'arc', 'are', 'ark', 'arm', 'art', 'ash', 'ate', 'awe', 'axe', 'bad', 'bat', 'bay', 'bed', 'bee', 'beg', 'bet', 'bid', 'big', 'bit', 'bob', 'bot', 'bow', 'box', 'boy', 'bus', 'but', 'buy', 'bye', 'cab', 'cam', 'can', 'cap', 'car', 'cat', 'cop', 'cow', 'cry', 'cup', 'cut', 'dam', 'day', 'den', 'dew', 'did', 'die', 'dig', 'dim', 'din', 'dip', 'dog', 'dot', 'dry', 'dug', 'dye', 'ear', 'eat', 'eel', 'egg', 'ego', 'elf', 'elm', 'emu', 'end', 'era', 'eve', 'eye', 'fan', 'far', 'fat', 'fax', 'fed', 'fee', 'fen', 'few', 'fig', 'fin', 'fir', 'fit', 'fix', 'flu', 'fly', 'foe', 'fog', 'fox', 'fry', 'fun', 'fur', 'gag', 'gap', 'gas', 'gel', 'gem', 'get', 'gig', 'gin', 'god', 'got', 'gum', 'gun', 'gut', 'guy', 'gym', 'had', 'ham', 'has', 'hat', 'hay', 'hem', 'hen', 'her', 'hid', 'him', 'hip', 'his', 'hit', 'hog', 'hop', 'hot', 'how', 'hub', 'hue', 'hug', 'hut', 'ice', 'icy', 'ill', 'ink', 'inn', 'ion', 'ire', 'irk', 'ivy', 'jab', 'jam', 'jar', 'jaw', 'jet', 'job', 'jog', 'joy', 'jug', 'key', 'kid', 'kin', 'kit', 'lab', 'lad', 'lag', 'lap', 'law', 'lay', 'led', 'leg', 'let', 'lid', 'lie', 'lip', 'lit', 'log', 'lot', 'low', 'lug', 'mad', 'man', 'map', 'mat', 'may', 'men', 'met', 'mid', 'mix', 'mob', 'mop', 'mow', 'mud', 'mug', 'nag', 'nap', 'net', 'new', 'nil', 'nip', 'nod', 'nor', 'not', 'now', 'nut', 'oak', 'odd', 'off', 'oil', 'old', 'one', 'opt', 'orb', 'ore', 'our', 'out', 'owl', 'own', 'pad', 'pan', 'par', 'pat', 'paw', 'pay', 'pea', 'peg', 'pen', 'pet', 'pie', 'pig', 'pin', 'pit', 'ply', 'pod', 'pot', 'pro', 'pub', 'pun', 'put', 'rag', 'rat', 'raw', 'ray', 'red', 'rib', 'rim', 'rip', 'rob', 'rod', 'rot', 'row', 'rub', 'rug', 'rum', 'run', 'rut', 'rye', 'sad', 'sat', 'saw', 'say', 'sea', 'sec', 'see', 'set', 'sew', 'sex', 'she', 'shy', 'sic', 'sim', 'sin', 'sip', 'sit', 'six', 'ski', 'sky', 'sly', 'sob', 'son', 'soy', 'spa', 'spy', 'sum', 'sun', 'tab', 'tag', 'tan', 'tap', 'tar', 'tax', 'tea', 'ted', 'tee', 'ten', 'the', 'thy', 'tic', 'tie', 'tin', 'tip', 'toe', 'ton', 'too', 'top', 'toy', 'try', 'tub', 'tug', 'two', 'use', 'van', 'vat', 'vet', 'vow', 'war', 'was', 'wax', 'way', 'web', 'wed', 'wee', 'wet', 'who', 'why', 'wig', 'win', 'wis', 'wit', 'woe', 'won', 'woo', 'wow', 'yes', 'yet', 'zip', 'zone', 'zoom', 'what', 'explain', 'tell', 'describe', 'how', 'does', 'do', 'can', 'please', 'define', 'give', 'information', 'want', 'know', 'learn', 'show', 'display', 'illustrate', 'demonstrate', 'about', 'of', 'in', 'on', 'at', 'to', 'from', 'by', 'with', 'without', 'through', 'during', 'before', 'after', 'above', 'below', 'between', 'among', 'is', 'are', 'was', 'were', 'be', 'been', 'have', 'has', 'had', 'will', 'would', 'could', 'should', 'may', 'might', 'must', 'shall', 'this', 'that', 'these', 'those', 'my', 'your', 'his', 'her', 'its', 'our', 'their', 'mine', 'yours', 'hers', 'ours', 'theirs', 'which', 'who', 'whom', 'whose', 'where', 'when', 'why', 'how', 'if', 'unless', 'although', 'though', 'because', 'since', 'so', 'than', 'as', 'like', 'such', 'same', 'different', 'other', 'another', 'much', 'many', 'few', 'little', 'more', 'less', 'most', 'least', 'very', 'quite', 'rather', 'fairly', 'extremely', 'incredibly', 'really', 'truly', 'actually', 'literally', 'figuratively', 'basically', 'essentially', 'fundamentally', 'primarily', 'secondarily', 'additionally', 'furthermore', 'moreover', 'however', 'nevertheless', 'nonetheless', 'therefore', 'consequently', 'thus', 'hence', 'accordingly', 'meanwhile', 'subsequently', 'eventually', 'finally', 'initially', 'originally', 'eventually', 'ultimately', 'eventually', 'meanwhile', 'simultaneously', 'alternatively', 'likewise', 'similarly', 'conversely', 'otherwise', 'instead', 'regardless', 'nevertheless', 'nonetheless', 'notwithstanding', 'despite', 'in spite of', 'due to', 'owing to', 'thanks to', 'because of', 'as a result of', 'as a consequence of', 'on account of', 'on behalf of', 'for the sake of', 'in favor of', 'against', 'toward', 'towards', 'into', 'onto', 'upon', 'over', 'under', 'beneath', 'beside', 'between', 'among', 'throughout', 'inside', 'outside', 'within', 'beyond', 'near', 'next to', 'close to', 'far from', 'away from', 'along', 'across', 'around', 'about', 'round', 'up', 'down', 'back', 'forth', 'forward', 'backward', 'sideways', 'straight', 'directly', 'indirectly', 'immediately', 'directly', 'eventually', 'gradually', 'suddenly', 'quickly', 'slowly', 'carefully', 'carelessly', 'deliberately', 'accidentally', 'intentionally', 'unintentionally', 'purposely', 'purposefully', 'consciously', 'unconsciously', 'automatically', 'manually', 'mechanically', 'electronically', 'digitally', 'analogously', 'physically', 'mentally', 'emotionally', 'intellectually', 'spiritually', 'morally', 'ethically', 'legally', 'illegally', 'formally', 'informally', 'officially', 'unofficially', 'publicly', 'privately', 'personally', 'impersonally', 'subjectively', 'objectively', 'relatively', 'absolutely', 'completely', 'partially', 'entirely', 'fully', 'totally', 'wholly', 'altogether', 'entirely', 'comprehensively', 'thoroughly', 'extensively', 'broadly', 'widely', 'narrowly', 'specifically', 'particularly', 'especially', 'notably', 'significantly', 'remarkably', 'considerably', 'substantially', 'materially', 'noticeably', 'appreciably', 'perceptibly', 'visibly', 'obviously', 'clearly', 'plainly', 'distinctly', 'definitely', 'certainly', 'undoubtedly', 'unquestionably', 'indisputably', 'incontestably', 'unarguably', 'uncontroversially', 'unambiguously', 'unequivocally', 'explicitly', 'expressly', 'specifically', 'particularly', 'precisely', 'exactly', 'accurately', 'correctly', 'properly', 'appropriately', 'suitably', 'adequately', 'sufficiently', 'enough', 'plenty', 'abundantly', 'amply', 'liberally', 'generously', 'lavishly', 'extravagantly', 'excessively', 'overly', 'unduly', 'excessively', 'unnecessarily', 'needlessly', 'pointlessly', 'uselessly', 'fruitlessly', 'vainly', 'in vain', 'to no avail', 'in effect', 'in fact', 'in reality', 'in truth', 'in actuality', 'in practice', 'in theory', 'hypothetically', 'theoretically', 'practically', 'virtually', 'almost', 'nearly', 'approximately', 'roughly', 'about', 'around', 'circa', 'somewhere', 'somehow', 'somewhat', 'some', 'any', 'every', 'each', 'either', 'neither', 'both', 'all', 'none', 'no', 'not', 'nothing', 'nobody', 'no one', 'nowhere', 'never', 'ever', 'always', 'usually', 'normally', 'typically', 'generally', 'commonly', 'frequently', 'often', 'regularly', 'periodically', 'occasionally', 'sometimes', 'rarely', 'seldom', 'hardly', 'scarcely', 'barely', 'merely', 'just', 'only', 'solely', 'exclusively', 'uniquely', 'singularly', 'particularly', 'especially', 'particularly', 'notably', 'remarkably', 'significantly', 'considerably', 'substantially', 'materially', 'noticeably', 'appreciably', 'perceptibly', 'visibly', 'obviously', 'clearly', 'plainly', 'distinctly', 'definitely', 'certainly', 'undoubtedly', 'unquestionably', 'indisputably', 'incontestably', 'unarguably', 'uncontroversially', 'unambiguously', 'unequivocally', 'explicitly', 'expressly', 'specifically', 'particularly', 'precisely', 'exactly', 'accurately', 'correctly', 'properly', 'appropriately', 'suitably', 'adequately', 'sufficiently', 'enough', 'plenty', 'abundantly', 'amply', 'liberally', 'generously', 'lavishly', 'extravagantly', 'excessively', 'overly', 'unduly', 'excessively', 'unnecessarily', 'needlessly', 'pointlessly', 'uselessly', 'fruitlessly', 'vainly', 'in vain', 'to no avail', 'in effect', 'in fact', 'in reality', 'in truth', 'in actuality', 'in practice', 'in theory', 'hypothetically', 'theoretically', 'practically', 'virtually', 'almost', 'nearly', 'approximately', 'roughly', 'about', 'around', 'circa', 'somewhere', 'somehow', 'somewhat'
   ]);
-  
+
   return commonWords.has(word.toLowerCase());
 }
 
@@ -548,34 +548,34 @@ function isCommonWord(word) {
 function extractCoreSubject(question) {
   // Clean and normalize the question
   let cleanQuestion = question.trim();
-  
+
   // Remove common question prefixes more aggressively
   const prefixesToRemove = [
-    'what is', 'what are', 'explain', 'tell me about', 'describe', 
+    'what is', 'what are', 'explain', 'tell me about', 'describe',
     'how does', 'how do', 'can you explain', 'please explain',
     'what is the', 'what are the', 'define', 'give me information about',
     'i want to know about', 'i would like to learn about',
     'show me', 'display', 'illustrate', 'demonstrate', 'tell me',
     'can you tell me about', 'could you explain', 'would you mind explaining'
   ];
-  
+
   // Sort prefixes by length (descending) to remove longer ones first
   prefixesToRemove.sort((a, b) => b.length - a.length);
-  
+
   for (const prefix of prefixesToRemove) {
     if (cleanQuestion.toLowerCase().startsWith(prefix)) {
       cleanQuestion = cleanQuestion.substring(prefix.length).trim();
       break;
     }
   }
-  
+
   // Remove trailing punctuation and whitespace
   cleanQuestion = cleanQuestion.replace(/[?!.]+$/, '').trim();
-  
+
   // Handle "how to X" patterns first (e.g., "how to bake bread" -> "baking")
   if (cleanQuestion.toLowerCase().startsWith('how to ')) {
     const action = cleanQuestion.substring(7).trim(); // Remove "how to "
-    
+
     // For multi-word actions, we want the whole phrase, not just verb conversion
     // Check if it's a simple single verb we know how to convert
     const words = action.split(/\s+/);
@@ -601,12 +601,12 @@ function extractCoreSubject(question) {
         'teach': 'teaching',
         'study': 'studying'
       };
-      
+
       const lowerAction = action.toLowerCase();
       if (actionMap[lowerAction]) {
         return actionMap[lowerAction];
       }
-      
+
       // Generic conversion for other single-word verbs
       if (lowerAction.endsWith('ing')) {
         return lowerAction; // Already in gerund form
@@ -620,43 +620,43 @@ function extractCoreSubject(question) {
       return action.replace(/^(a|an|the)\s+/i, '');
     }
   }
-  
+
   // Handle "X of Y" patterns (e.g., "process of photosynthesis" -> "photosynthesis")
   const ofPattern = /^(?:the )?(?:process|concept|theory|principle|law|function|structure|mechanism|procedure|approach|model|framework|design|architecture|component|element|feature|aspect|property|characteristic|attribute|quality|trait|behavior|pattern|relationship|connection|interaction|effect|impact|result|outcome|benefit|advantage|disadvantage|limitation|challenge|problem|solution|application|implementation|example|case) of (.+)$/i;
   const ofMatch = cleanQuestion.match(ofPattern);
   if (ofMatch) {
     return ofMatch[1].trim();
   }
-  
+
   // Handle "X in Y" patterns (e.g., "photosynthesis in plants" -> "photosynthesis")
   const inPattern = /^(.+) (?:in|within|inside|during|throughout|across) (.+)$/i;
   const inMatch = cleanQuestion.match(inPattern);
   if (inMatch) {
     return inMatch[1].trim();
   }
-  
+
   // Handle "benefits of X" or "advantages of X" patterns
   const benefitsPattern = /^(?:what are )?(?:the )?(?:benefits|advantages|uses|applications) (?:of|for) (.+)$/i;
   const benefitsMatch = cleanQuestion.match(benefitsPattern);
   if (benefitsMatch) {
     return benefitsMatch[1].trim();
   }
-  
+
   // Handle "X vs Y" or "X versus Y" patterns
   const vsPattern = /^(.+) (?:vs|versus) (.+)$/i;
   const vsMatch = cleanQuestion.match(vsPattern);
   if (vsMatch) {
     return `${vsMatch[1].trim()} vs ${vsMatch[2].trim()}`;
   }
-  
+
   // Split into words for further analysis
   const words = cleanQuestion.split(/\s+/);
-  
+
   // If it's a short phrase (1-4 words), use it directly
   if (words.length <= 4) {
     return cleanQuestion;
   }
-  
+
   // For longer phrases, try to identify the core noun phrase with enhanced precision
   // Expanded list of key nouns for better matching
   const keyNouns = [
@@ -685,7 +685,7 @@ function extractCoreSubject(question) {
     'geology', 'oceanography', 'meteorology', 'ecology', 'environment',
     'nutrition', 'diet', 'exercise', 'fitness', 'sport', 'game', 'entertainment'
   ];
-  
+
   // Look for key nouns in the phrase from right to left (more likely to be the core subject)
   for (let i = words.length - 1; i >= 0; i--) {
     const word = words[i].toLowerCase().replace(/[^a-zA-Z]/g, '');
@@ -695,13 +695,13 @@ function extractCoreSubject(question) {
       return words.slice(startIndex, i + 1).join(' ');
     }
   }
-  
+
   // If no key noun found, look for proper nouns (capitalized words)
   const properNouns = words.filter(word => /^[A-Z][a-z]/.test(word));
   if (properNouns.length > 0) {
     return properNouns.join(' ');
   }
-  
+
   // If still no match, return the last 2-3 words as the most likely subject
   const endIndex = words.length;
   const startIndex = Math.max(0, endIndex - 3);
@@ -718,14 +718,14 @@ async function generateAvatarResponse(question, language = "english") {
     console.log(`[Gemini] [${requestId}] Language normalized:`, language.toLowerCase());
     console.log(`[Gemini] [${requestId}] Question length:`, question.length);
     console.log(`[Gemini] [${requestId}] ⚠️ CRITICAL: Response MUST be in ${language.toUpperCase()} language`);
-    
+
     // Use the gemini 2.5 flash model as requested
     const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
-    
+
     // Adjust template based on language - normalize first
     const normalizedLang = language.toLowerCase().trim();
     console.log(`[Gemini] [${requestId}] Normalized language: "${normalizedLang}"`);
-    
+
     let languageSpecificTemplate = template;
     if (normalizedLang === "hindi" || normalizedLang === "hi") {
       // For Hindi, respond naturally in Hindi
@@ -773,7 +773,7 @@ LANGUAGE INSTRUCTIONS FOR ENGLISH:
 - Make it feel like a real conversation, not a formal response
 - Be warm, friendly, and engaging`;
     }
-    
+
     // Add explicit language instruction at the start of prompt for Telugu/Hindi
     let finalPrompt = languageSpecificTemplate;
     if (normalizedLang === "telugu" || normalizedLang === "te") {
@@ -853,47 +853,80 @@ REMEMBER: Hindi script = हिंदी लिपि. Use ONLY these characters
 
 ${languageSpecificTemplate}`;
     }
-    
+
     const prompt = `${finalPrompt}\n\nHuman: ${question}\nAI:`;
     console.log(`[Gemini] [${requestId}] Sending prompt to Gemini (first 300 chars):`, prompt.substring(0, 300) + "...");
     console.log(`[Gemini] [${requestId}] Full question:`, question);
     console.log(`[Gemini] [${requestId}] Language context: ${normalizedLang.toUpperCase()}`);
-    
+
     const result = await model.generateContent(prompt);
     const response = await result.response;
-    const text = response.text();
-    
+    let text = response.text();
+
     console.log(`[Gemini] [${requestId}] Raw Gemini response (first 200 chars):`, text.substring(0, 200) + "...");
     console.log(`[Gemini] [${requestId}] Full response length:`, text.length);
-    
+
+    // Clean markdown code fences before parsing
+    text = text.trim();
+    text = text.replace(/^```json\s*/g, '').replace(/^```\s*/g, '').replace(/```\s*$/g, '').trim();
+
+    console.log(`[Gemini] [${requestId}] Cleaned response (first 200 chars):`, text.substring(0, 200) + "...");
+
     // Try to parse the JSON response
     try {
       const parsedResponse = JSON.parse(text);
       const validatedResponse = responseSchema.parse(parsedResponse);
       console.log(`[Gemini] [${requestId}] ✅ Successfully parsed and validated response`);
+
+      // NEW: Recursively check if any of the text fields are themselves JSON
+      if (validatedResponse.messages && Array.isArray(validatedResponse.messages)) {
+        validatedResponse.messages.forEach((m, idx) => {
+          let mText = m.text.trim();
+          // Remove internal code fences if Gemini nested them
+          if (mText.includes('```json') || (mText.startsWith('{') && mText.includes('"text"'))) {
+            console.log(`[Gemini] [${requestId}] ⚠️ Detected nested JSON in message ${idx}, extracting...`);
+            let innerText = mText.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim();
+            try {
+              const innerParsed = JSON.parse(innerText);
+              if (innerParsed.messages && Array.isArray(innerParsed.messages) && innerParsed.messages[0].text) {
+                m.text = innerParsed.messages[0].text;
+              } else if (innerParsed.text) {
+                m.text = innerParsed.text;
+              }
+            } catch (e) {
+              // Not valid JSON, try simple regex extraction
+              const match = innerText.match(/"text"\s*:\s*"([^"]+)"/);
+              if (match && match[1]) {
+                m.text = match[1].replace(/\\n/g, ' ').replace(/\\"/g, '"').replace(/\\'/g, "'");
+              }
+            }
+          }
+        });
+      }
+
       console.log(`[Gemini] [${requestId}] Response messages:`, validatedResponse.messages.map(m => m.text.substring(0, 50) + "..."));
-      
+
       // CRITICAL: Validate language for Hindi/Telugu responses - use normalized language
       const checkLang = normalizedLang;
       if (checkLang === "telugu" || checkLang === "te") {
         const teluguScriptRegex = /[\u0C00-\u0C7F]/;
         const allMessages = validatedResponse.messages.map(m => m.text).join(' ');
         const hasTeluguScript = teluguScriptRegex.test(allMessages);
-        
+
         console.log(`[Gemini] [${requestId}] ===== Validating Telugu Response =====`);
         console.log(`[Gemini] [${requestId}] All messages combined: "${allMessages.substring(0, 200)}..."`);
         console.log(`[Gemini] [${requestId}] Contains Telugu script: ${hasTeluguScript ? '✅ YES' : '❌ NO'}`);
-        
+
         if (!hasTeluguScript) {
           console.error(`[Gemini] [${requestId}] ❌ CRITICAL ERROR: Response does NOT contain Telugu script!`);
           console.error(`[Gemini] [${requestId}] Full response text: "${allMessages}"`);
           console.error(`[Gemini] [${requestId}] ⚠️ FORCING Telugu response - replacing with Telugu text`);
-          
+
           // Force a Telugu response - use a proper Telugu message
-          const teluguFallback = question && question.trim() ? 
+          const teluguFallback = question && question.trim() ?
             `నమస్కారం! మీ ప్రశ్నకు సంబంధించి, నేను తెలుగులో సమాధానం ఇవ్వగలను. దయచేసి మీ ప్రశ్నను తెలుగులో అడగండి.` :
             `నమస్కారం! నేను తెలుగులో మాత్రమే ప్రతిస్పందించగలను. దయచేసి మీ ప్రశ్నను తెలుగులో అడగండి.`;
-          
+
           validatedResponse.messages[0].text = teluguFallback;
           console.log(`[Gemini] [${requestId}] ✅ Replaced with Telugu text: "${teluguFallback}"`);
         } else {
@@ -903,55 +936,76 @@ ${languageSpecificTemplate}`;
         const hindiScriptRegex = /[\u0900-\u097F]/;
         const allMessages = validatedResponse.messages.map(m => m.text).join(' ');
         const hasHindiScript = hindiScriptRegex.test(allMessages);
-        
+
         console.log(`[Gemini] [${requestId}] ===== Validating Hindi Response =====`);
         console.log(`[Gemini] [${requestId}] All messages combined: "${allMessages.substring(0, 200)}..."`);
         console.log(`[Gemini] [${requestId}] Contains Hindi script: ${hasHindiScript ? '✅ YES' : '❌ NO'}`);
-        
+
         if (!hasHindiScript) {
           console.error(`[Gemini] [${requestId}] ❌ CRITICAL ERROR: Response does NOT contain Hindi script!`);
           console.error(`[Gemini] [${requestId}] Full response text: "${allMessages}"`);
           console.error(`[Gemini] [${requestId}] ⚠️ FORCING Hindi response - replacing with Hindi text`);
-          
+
           // Force a Hindi response - use a proper Hindi message
-          const hindiFallback = question && question.trim() ? 
+          const hindiFallback = question && question.trim() ?
             `नमस्ते! आपके प्रश्न के संबंध में, मैं हिंदी में उत्तर दे सकता हूं। कृपया अपना प्रश्न हिंदी में पूछें।` :
             `नमस्ते! मैं केवल हिंदी में उत्तर दे सकता हूं। कृपया अपना प्रश्न हिंदी में पूछें।`;
-          
+
           validatedResponse.messages[0].text = hindiFallback;
           console.log(`[Gemini] [${requestId}] ✅ Replaced with Hindi text: "${hindiFallback}"`);
         } else {
           console.log(`[Gemini] [${requestId}] ✅ Response contains Hindi script - validation passed`);
         }
       }
-      
+
       // Add image URLs to the response
       const responseText = validatedResponse.messages.map(m => m.text).join(' ');
       validatedResponse.images = await generateImageUrls(question, responseText);
       console.log(`[Gemini] [${requestId}] Generated ${validatedResponse.images.length} images`);
-      
+
       return validatedResponse;
     } catch (parseError) {
       // If parsing fails, create a default response
       console.error(`[Gemini] [${requestId}] ❌ Error parsing Gemini response:`, parseError);
       console.error(`[Gemini] [${requestId}] Raw response that failed to parse:`, text);
+
+      // Try to extract clean text from the response
+      let cleanText = text || "Hello! I'm your AI assistant, ready to help with any topic you'd like to discuss.";
+
+      // Remove markdown code fences
+      cleanText = cleanText.replace(/```json\s*/g, '').replace(/```\s*/g, '');
+      cleanText = cleanText.replace(/^`+|`+$/g, '');
+
+      // If it still looks like JSON, try to extract the text field
+      if (cleanText.includes('"messages"') && cleanText.includes('"text"')) {
+        try {
+          const parsed = JSON.parse(cleanText);
+          if (parsed.messages && Array.isArray(parsed.messages) && parsed.messages[0] && parsed.messages[0].text) {
+            cleanText = parsed.messages[0].text;
+            console.log(`[Gemini] [${requestId}] ✅ Extracted text from JSON string:`, cleanText.substring(0, 100));
+          }
+        } catch (e) {
+          console.warn(`[Gemini] [${requestId}] Could not extract text from JSON string:`, e);
+        }
+      }
+
       const defaultResponse = {
         messages: [
           {
-            text: text || "Hello! I'm your AI assistant, ready to help with any topic you'd like to discuss.",
+            text: cleanText,
             facialExpression: "default",
             animation: "TalkingOne"
           }
         ]
       };
-      defaultResponse.images = await generateImageUrls(question, text);
+      defaultResponse.images = await generateImageUrls(question, cleanText);
       return defaultResponse;
     }
   } catch (error) {
     console.error(`[Gemini] [${requestId}] ❌ Error generating response with Gemini:`, error);
     console.error(`[Gemini] [${requestId}] Error message:`, error.message);
     console.error(`[Gemini] [${requestId}] Error stack:`, error.stack);
-    
+
     // Handle quota exceeded error specifically
     if (error.status === 429) {
       // Return a quota exceeded message
@@ -970,7 +1024,7 @@ ${languageSpecificTemplate}`;
         ]
       };
     }
-    
+
     // Return a default response in case of other errors
     return {
       messages: [
@@ -988,16 +1042,16 @@ ${languageSpecificTemplate}`;
 async function generateChatSummary(chatHistory) {
   try {
     console.log("Generating summary for chat history...");
-    
+
     // Use the gemini 2.5 flash model
     const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
-    
+
     // Format the chat history for the prompt
     const formattedHistory = chatHistory.map(msg => {
       const sender = msg.sender === 'user' ? 'User' : msg.sender === 'ai' ? 'AI Assistant' : 'System';
       return `${sender}: ${msg.text}`;
     }).join('\n');
-    
+
     const summaryPrompt = `You are an intelligent AI assistant. Your task is to create a concise, informative summary of the conversation between a user and an AI assistant.
 
 Please follow these guidelines:
@@ -1012,12 +1066,12 @@ Conversation History:
 ${formattedHistory}
 
 Please provide a summary of this conversation in a natural, readable format.`;
-    
+
     console.log("Sending summary prompt to Gemini...");
     const result = await model.generateContent(summaryPrompt);
     const response = await result.response;
     const summaryText = response.text();
-    
+
     console.log("Successfully generated chat summary");
     return summaryText.trim();
   } catch (error) {
@@ -1030,16 +1084,16 @@ Please provide a summary of this conversation in a natural, readable format.`;
 async function generateRetentionTest(chatHistory) {
   try {
     console.log("Generating retention test based on chat history...");
-    
+
     // Use gemini-1.5-flash for higher quota (1500 requests/day vs 20 for 2.5-flash)
     const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
-    
+
     // Format the chat history for the prompt
     const formattedHistory = chatHistory.map(msg => {
       const sender = msg.sender === 'user' ? 'User' : msg.sender === 'ai' ? 'AI Assistant' : 'System';
       return `${sender}: ${msg.text}`;
     }).join('\n');
-    
+
     const retentionTestTemplate = `
     You are an intelligent and knowledgeable educator who creates comprehensive retention tests. 
     Based on the conversation history provided below, create a test that assesses the user's understanding of the material discussed.
@@ -1080,14 +1134,14 @@ async function generateRetentionTest(chatHistory) {
     
     Generate a comprehensive retention test based on the conversation history following this format exactly.
     `;
-    
+
     console.log("Sending retention test prompt to Gemini...");
     const result = await model.generateContent(retentionTestTemplate);
     const response = await result.response;
     const testText = response.text();
-    
+
     console.log("Raw Gemini retention test response:", testText.substring(0, 100) + "...");
-    
+
     // Try to parse the JSON response
     try {
       // Extract JSON from potential markdown code blocks
@@ -1098,7 +1152,7 @@ async function generateRetentionTest(chatHistory) {
       if (cleanTestText.endsWith("```")) {
         cleanTestText = cleanTestText.substring(0, cleanTestText.length - 3);
       }
-      
+
       const parsedTest = JSON.parse(cleanTestText);
       console.log("Successfully parsed and validated retention test");
       return parsedTest;
@@ -1121,16 +1175,16 @@ async function generateRetentionTest(chatHistory) {
 async function generatePersonalizedFeedback(testResults, chatHistory) {
   try {
     console.log("Generating personalized feedback based on test results...");
-    
+
     // Use gemini-1.5-flash for higher quota
     const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
-    
+
     // Format the chat history for the prompt
     const formattedHistory = chatHistory.map(msg => {
       const sender = msg.sender === 'user' ? 'User' : msg.sender === 'ai' ? 'AI Assistant' : 'System';
       return `${sender}: ${msg.text}`;
     }).join('\n');
-    
+
     const feedbackTemplate = `
     You are an intelligent and supportive educator who provides personalized feedback on test performance. 
     Based on the test results and conversation history provided below, give constructive feedback and specific improvement suggestions.
@@ -1153,12 +1207,12 @@ async function generatePersonalizedFeedback(testResults, chatHistory) {
     Format your response in a natural, conversational way that would be suitable for speech by an AI avatar.
     Be specific and actionable in your suggestions, referencing the actual topics discussed in the conversation.
     `;
-    
+
     console.log("Sending feedback prompt to Gemini...");
     const result = await model.generateContent(feedbackTemplate);
     const response = await result.response;
     const feedbackText = response.text();
-    
+
     console.log("Successfully generated personalized feedback");
     return feedbackText;
   } catch (error) {

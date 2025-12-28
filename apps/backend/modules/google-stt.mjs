@@ -22,18 +22,18 @@ async function transcribeWithGoogle(audioFilePath, language = "english") {
     console.log(`[Google STT] Language parameter: ${language}`);
     console.log(`[Google STT] Audio file: ${audioFilePath}`);
     console.log(`[Google STT] File exists: ${fs.existsSync(audioFilePath)}`);
-    
+
     if (!fs.existsSync(audioFilePath)) {
       throw new Error(`Audio file not found: ${audioFilePath}`);
     }
-    
+
     const fileStats = fs.statSync(audioFilePath);
     console.log(`Audio file size: ${fileStats.size} bytes`);
-    
+
     if (fileStats.size === 0) {
       throw new Error("Audio file is empty");
     }
-    
+
     // Read credentials and get access token
     const auth = new GoogleAuth({
       keyFile: process.env.GOOGLE_APPLICATION_CREDENTIALS,
@@ -51,58 +51,67 @@ async function transcribeWithGoogle(audioFilePath, language = "english") {
 
     // Use v1 REST API endpoint (free tier)
     const apiUrl = 'https://speech.googleapis.com/v1/speech:recognize';
-    
+
     // Map language to Google STT language codes
-    // Handle all variations: "english", "en", "hindi", "hi", "telugu", "te"
     const lang = language.toLowerCase().trim();
-    let languageCode = 'en-US'; // Default to English
-    let alternativeLanguageCodes = []; // Alternative codes to try if primary fails
-    
-    if (lang === 'hindi' || lang === 'hi') {
+    let languageCode = 'en-US';
+    let alternativeLanguageCodes = [];
+
+    if (lang === 'hindi' || lang === 'hi' || lang === 'hin') {
       languageCode = 'hi-IN';
-      alternativeLanguageCodes = ['hi']; // Fallback to generic Hindi
-      console.log(`[Google STT] ✅ Hindi selected - using language code: ${languageCode}`);
-    } else if (lang === 'telugu' || lang === 'te') {
+      alternativeLanguageCodes = ['hi'];
+    } else if (lang === 'telugu' || lang === 'te' || lang === 'tel') {
       languageCode = 'te-IN';
-      alternativeLanguageCodes = ['te']; // Fallback to generic Telugu
-      console.log(`[Google STT] ✅ Telugu selected - using language code: ${languageCode}`);
-    } else if (lang === 'english' || lang === 'en') {
+      alternativeLanguageCodes = ['te'];
+    } else if (lang === 'english' || lang === 'en' || lang === 'eng') {
       languageCode = 'en-US';
       alternativeLanguageCodes = ['en-GB', 'en'];
-      console.log(`[Google STT] ✅ English selected - using language code: ${languageCode}`);
-    } else {
-      console.warn(`[Google STT] ⚠️ Unknown language: ${language}, defaulting to en-US`);
     }
-    
-    console.log(`[Google STT] ===== Language Configuration =====`);
-    console.log(`[Google STT] Input language parameter: "${language}"`);
-    console.log(`[Google STT] Normalized language: "${lang}"`);
-    console.log(`[Google STT] Primary language code: ${languageCode}`);
-    console.log(`[Google STT] Alternative codes: ${alternativeLanguageCodes.join(', ') || 'none'}`);
-    console.log(`[Google STT] ⚠️ CRITICAL: Transcription will be in ${languageCode}`);
-    
+
+    // Determine encoding based on file extension
+    const extension = audioFilePath.split('.').pop().toLowerCase();
+    let encoding = 'ENCODING_UNSPECIFIED';
+    let sampleRateHertz = undefined;
+
+    if (extension === 'wav') {
+      encoding = 'LINEAR16';
+      sampleRateHertz = 16000;
+      console.log(`[Google STT] Detected WAV - using LINEAR16 @ 16kHz`);
+    } else if (extension === 'webm') {
+      // For WebM, let's try WITHOUT specifying encoding first to let Google handle it,
+      // OR use WEBM_OPUS if we are sure. Many browsers use Opus in WebM.
+      encoding = 'WEBM_OPUS';
+      sampleRateHertz = 48000;
+      console.log(`[Google STT] Detected webm - using WEBM_OPUS @ 48kHz`);
+    } else if (extension === 'ogg') {
+      encoding = 'OGG_OPUS';
+      sampleRateHertz = 48000;
+      console.log(`[Google STT] Detected ogg - using OGG_OPUS @ 48kHz`);
+    }
+
     const requestBody = {
       config: {
-        encoding: 'LINEAR16', // LINEAR16 is for WAV files
-        sampleRateHertz: 16000,
-        languageCode: languageCode, // CRITICAL: This determines transcription language
+        encoding: encoding,
+        sampleRateHertz: sampleRateHertz,
+        languageCode: languageCode,
         enableAutomaticPunctuation: true,
-        enableWordTimeOffsets: false,
-        // Add alternative language hints for better accuracy
+        model: 'latest_long', // Use latest model for better accuracy
+        useEnhanced: true,
         alternativeLanguageCodes: alternativeLanguageCodes.length > 0 ? alternativeLanguageCodes : undefined,
       },
       audio: {
         content: audioBytes,
       },
     };
-    
+
     // Remove undefined fields
     if (!requestBody.config.alternativeLanguageCodes) {
       delete requestBody.config.alternativeLanguageCodes;
     }
-    
+
     console.log(`[Google STT] ===== Sending Request to Google STT API =====`);
     console.log(`[Google STT] Request config:`, JSON.stringify(requestBody.config, null, 2));
+    console.log(`[Google STT] Audio size (base64 length): ${audioBytes.length}`);
     console.log(`[Google STT] ⚠️ CRITICAL: languageCode is set to: ${languageCode}`);
     console.log(`[Google STT] This will transcribe audio in ${languageCode} language`);
 
@@ -131,26 +140,29 @@ async function transcribeWithGoogle(audioFilePath, language = "english") {
 
     const data = await response.json();
     console.log(`[Google STT] ===== API Response Received =====`);
-    console.log(`[Google STT] Response:`, JSON.stringify(data, null, 2));
-    
+    console.log(`[Google STT] Status: ${response.status}`);
+    console.log(`[Google STT] Response Body:`, JSON.stringify(data, null, 2));
+
     if (!data.results || data.results.length === 0) {
       console.warn(`[Google STT] ⚠️ No transcription results returned`);
       console.warn(`[Google STT] Full API response:`, JSON.stringify(data, null, 2));
+      console.warn(`[Google STT] Audio Bytes length: ${audioBytes.length}`);
+      console.warn(`[Google STT] Audio Bytes suffix: ${audioBytes.substring(audioBytes.length - 20)}`);
       console.warn(`[Google STT] This might indicate:`);
       console.warn(`[Google STT]   1. Audio quality too poor`);
       console.warn(`[Google STT]   2. Language code ${languageCode} not supported`);
-      console.warn(`[Google STT]   3. Audio format issues`);
+      console.warn(`[Google STT]   3. Audio format issues (Using ${encoding})`);
       return '';
     }
 
     const transcription = data.results
       .map(result => result.alternatives[0].transcript)
       .join('\n');
-      
+
     console.log(`[Google STT] ===== Transcription Result =====`);
     console.log(`[Google STT] Transcribed text: "${transcription}"`);
     console.log(`[Google STT] Transcription length: ${transcription.length} characters`);
-    
+
     // Validate transcription language matches requested language
     if (lang === 'telugu' || lang === 'te') {
       const teluguScriptRegex = /[\u0C00-\u0C7F]/;
@@ -169,7 +181,7 @@ async function transcribeWithGoogle(audioFilePath, language = "english") {
         console.warn(`[Google STT] Transcription: "${transcription}"`);
       }
     }
-    
+
     return transcription;
   } catch (error) {
     console.error('Google STT Error:', error);

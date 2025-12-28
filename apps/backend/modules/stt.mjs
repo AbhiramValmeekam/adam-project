@@ -8,6 +8,12 @@ import { transcribeWithGoogle } from "./google-stt.mjs";
 
 dotenv.config();
 
+const debugLog = (msg) => {
+  const logMsg = `[${new Date().toISOString()}] ${msg}\n`;
+  fs.appendFileSync(join("debug_audio", "stt_debug.log"), logMsg);
+  console.log(msg);
+};
+
 const execPromise = promisify(exec);
 
 /**
@@ -20,64 +26,73 @@ const execPromise = promisify(exec);
  */
 async function convertAudioToText({ audioData, language = "english" }) {
   try {
-    console.log(`Starting STT conversion for language: ${language}`);
-    console.log(`Audio data size: ${audioData.length} bytes`);
-    
-    // Save audio data to a temporary file (cross-platform temp directory)
+    debugLog(`Starting STT conversion for language: ${language}`);
+    debugLog(`Audio data size: ${audioData.length} bytes`);
+
+    // Save audio data to a temporary file
     const tempDir = tmpdir();
     const timestamp = Date.now();
+    // Use .webm as a default but we'll try to be smart
     const tempFilePath = join(tempDir, `input_audio_${timestamp}.webm`);
     const tempWavPath = join(tempDir, `input_audio_${timestamp}.wav`);
-    
-    console.log(`Writing audio to temp file: ${tempFilePath}`);
+
+    debugLog(`Writing audio to temp file: ${tempFilePath}`);
     fs.writeFileSync(tempFilePath, audioData);
-    console.log(`Audio file written, size: ${fs.statSync(tempFilePath).size} bytes`);
-    
-    // Try to convert to WAV format first (needed for many STT services)
+
+    let finalPath = tempFilePath;
+
+    // For Google STT, WebM are often better handled raw if they come from Chrome
+    // We will still keep the WAV conversion as a fallback or for other models
     try {
-      await execPromise(`ffmpeg -i "${tempFilePath}" -ar 16000 -ac 1 "${tempWavPath}" -y`);
+      debugLog(`[STT] Normalization/Conversion: ${tempFilePath} -> ${tempWavPath}`);
+      await execPromise(`ffmpeg -i "${tempFilePath}" -vn -acodec pcm_s16le -ar 16000 -ac 1 "${tempWavPath}" -y`);
+      debugLog(`[STT] WAV conversion ready: ${tempWavPath} (${fs.statSync(tempWavPath).size} bytes)`);
     } catch (conversionError) {
-      console.warn("FFmpeg conversion failed, using original file:", conversionError.message);
-      // If conversion fails, use the original file
-      fs.copyFileSync(tempFilePath, tempWavPath);
+      debugLog(`[STT] FFmpeg conversion failed: ${conversionError.message}`);
     }
-    
+
+    // DECISION: We will try the ORIGINAL file for Google STT if it's WebM
+    // because Chrome's raw output is usually what Google expects.
+    if (tempFilePath.endsWith('.webm')) {
+      finalPath = tempFilePath;
+      debugLog(`[STT] Prioritizing RAW WebM for Google STT: ${finalPath}`);
+    } else if (fs.existsSync(tempWavPath)) {
+      finalPath = tempWavPath;
+      debugLog(`[STT] Using converted WAV: ${finalPath}`);
+    }
+
     // Clean up temporary files
     const cleanup = () => {
       try {
         if (fs.existsSync(tempFilePath)) fs.unlinkSync(tempFilePath);
         if (fs.existsSync(tempWavPath)) fs.unlinkSync(tempWavPath);
-      } catch (cleanupError) {
-        console.warn("Cleanup error:", cleanupError.message);
-      }
+      } catch (cleanupError) { }
     };
-    
-    // Try Google Speech-to-Text if credentials are available
-    if (process.env.GOOGLE_APPLICATION_CREDENTIALS && fs.existsSync(process.env.GOOGLE_APPLICATION_CREDENTIALS)) {
+
+    // Try Google Speech-to-Text
+    const credPath = process.env.GOOGLE_APPLICATION_CREDENTIALS;
+    debugLog(`[STT] Credentials Path: ${credPath}`);
+    debugLog(`[STT] Credentials File Exists: ${credPath ? fs.existsSync(credPath) : 'no path'}`);
+
+    if (credPath && fs.existsSync(credPath)) {
       try {
-        console.log(`[STT] Attempting Google STT with language: ${language}`);
-        console.log(`[STT] Language will be mapped to appropriate Google STT language code`);
-        const result = await transcribeWithGoogle(tempWavPath, language);
+        debugLog(`[STT] Attempting Google STT with file: ${finalPath}`);
+        debugLog(`[STT] Final file size for Google: ${fs.statSync(finalPath).size} bytes`);
+        const result = await transcribeWithGoogle(finalPath, language);
         if (result && result.trim() !== "") {
-          console.log(`[STT] ✅ Google STT succeeded: "${result}"`);
-          console.log(`[STT] Transcription length: ${result.length} characters`);
+          debugLog(`[STT] ✅ Google STT succeeded: "${result}"`);
           cleanup();
           return result;
         } else {
-          console.warn("[STT] ⚠️ Google STT returned empty result");
+          debugLog("[STT] ⚠️ Google STT returned empty result or null");
         }
       } catch (googleError) {
-        console.error("Google STT failed:", googleError.message);
-        console.error("Google STT error details:", googleError);
-        if (googleError.stack) {
-          console.error("Google STT stack:", googleError.stack);
-        }
+        debugLog(`[STT] ❌ Google STT failed: ${googleError.message}`);
       }
     } else {
-      console.warn("GOOGLE_APPLICATION_CREDENTIALS not set or file not found, skipping Google STT");
-      console.warn("Credentials path:", process.env.GOOGLE_APPLICATION_CREDENTIALS);
+      debugLog("[STT] ❌ GOOGLE_APPLICATION_CREDENTIALS not set or file not found");
     }
-    
+
     // Try Azure Speech-to-Text if credentials are available
     if (process.env.AZURE_SPEECH_KEY && process.env.AZURE_SPEECH_REGION) {
       try {
@@ -85,27 +100,25 @@ async function convertAudioToText({ audioData, language = "english" }) {
         cleanup();
         return result;
       } catch (azureError) {
-        console.warn("Azure STT failed:", azureError.message);
+        debugLog(`[STT] Azure STT failed: ${azureError.message}`);
       }
     }
-    
+
     // Try local Whisper.cpp if available
     try {
       const result = await transcribeWithLocalWhisper(tempWavPath);
       cleanup();
       return result;
     } catch (whisperError) {
-      console.warn("Local Whisper failed:", whisperError.message);
+      debugLog(`[STT] Local Whisper failed: ${whisperError.message}`);
     }
-    
-    // Fallback: Return empty string to indicate transcription failed
-    // This allows the server to handle the error appropriately
-    console.warn("All STT methods failed, returning empty transcription");
+
+    debugLog("All STT methods failed, returning empty transcription");
     cleanup();
     return "";
-    
+
   } catch (error) {
-    console.error("STT Error:", error);
+    debugLog(`[STT] Error: ${error.message}`);
     return "";
   }
 }
@@ -127,17 +140,17 @@ async function transcribeWithLocalWhisper(audioFilePath) {
   try {
     // Check if whisper.cpp is available
     await execPromise("whisper --help");
-    
+
     // Run whisper.cpp on the audio file
     const { stdout } = await execPromise(`whisper "${audioFilePath}" --model tiny.en --output-txt`);
-    
+
     // Read the transcription result
     const txtFilePath = audioFilePath.replace(/\.[^/.]+$/, ".txt");
     if (fs.existsSync(txtFilePath)) {
       const transcription = fs.readFileSync(txtFilePath, 'utf8');
       return transcription.trim();
     }
-    
+
     return "Transcription completed with Whisper.";
   } catch (error) {
     console.error("Local Whisper Error:", error);
